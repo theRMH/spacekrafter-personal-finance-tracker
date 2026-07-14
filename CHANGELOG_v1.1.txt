@@ -1,0 +1,29 @@
+PERSONAL FINANCE HUB - V1.1 CHANGE SUMMARY
+
+1. Accountant Profile
+- Profile, header, sidebar and audit identity now use the authenticated user record.
+- Accountant prototype uses Priya Raman sample details instead of Owner details.
+
+2. Users & Access
+- Renamed User Access to Users & Access.
+- Added user directory and Create User / Invite User flow.
+- Supports multiple Accountant users with individual status, password reset, selected accounts and permissions.
+- Phase 1 roles remain Owner and Accountant; architecture supports more roles later.
+
+3. Financial Calendar
+- Added summary cards, full monthly grid, event-type indicators, filters, agenda panel and current-day state.
+- Calendar commitments remain separate from actual transactions until matched with imported payments.
+
+4. Approved UI Palette
+- Dominant Navy: #181E32
+- Deep Navy: #171D31
+- Warm Beige: #CDC1B4
+- Earth Neutral: #6C6456
+- Neutral Grey: #767678
+- Teal: #56A688
+- Blue: #3A71AA
+- Green/teal is an accent and success colour, not the dominant theme.
+
+5. Documentation
+- PRD updated to v1.1 approved build baseline.
+- IA updated to v1.1 with user architecture, profile isolation, calendar architecture and visual design direction.
