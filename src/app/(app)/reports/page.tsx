@@ -26,7 +26,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: { ta
 
   return (
     <div>
-      <div className="flex justify-between items-start gap-4 mb-4">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-4">
         <div>
           <h1 className="text-2xl font-bold text-navy">Reports and Insights</h1>
           <p className="text-sm text-muted mt-1">Spend, income, accounts, commitments and investments</p>

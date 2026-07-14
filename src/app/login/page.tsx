@@ -59,7 +59,17 @@ export default function LoginPage() {
         <small className="text-white/50 relative">Draft build against approved PRD/IA v1.1</small>
       </div>
 
-      <div className="grid place-items-center p-10">
+      <div className="grid place-items-center p-6 sm:p-10">
+        <div className="flex md:hidden items-center gap-3 mb-6 w-full max-w-md">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-info to-navy grid place-items-center font-bold text-white">
+            SP
+          </div>
+          <div>
+            <strong className="block text-navy">Spacekrafter</strong>
+            <span className="text-xs text-muted">Personal Finance Tracker</span>
+          </div>
+        </div>
+
         <form
           onSubmit={handleSubmit}
           className="w-full max-w-md bg-white rounded-card shadow-lg p-7 border border-[#e3ddd7]"

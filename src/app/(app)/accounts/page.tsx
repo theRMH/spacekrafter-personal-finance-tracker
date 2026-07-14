@@ -23,7 +23,7 @@ export default async function AccountsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-start gap-4 mb-6">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-navy">Accounts</h1>
           <p className="text-sm text-muted mt-1">
@@ -66,7 +66,7 @@ export default async function AccountsPage() {
             <label className="block text-xs text-muted mb-1.5">Account name</label>
             <input name="name" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="HDFC Personal" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-muted mb-1.5">Type</label>
               <select name="type" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5">

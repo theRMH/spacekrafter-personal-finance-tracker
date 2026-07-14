@@ -25,7 +25,7 @@ export default function EntryForm({
 
   return (
     <form action={createTransaction} className="grid gap-4 max-w-2xl">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-muted mb-1.5">Date</label>
           <input
@@ -42,7 +42,7 @@ export default function EntryForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-muted mb-1.5">Type</label>
           <select name="type" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
@@ -78,7 +78,7 @@ export default function EntryForm({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-muted mb-1.5">Category</label>
           <select
@@ -113,7 +113,7 @@ export default function EntryForm({
         <input name="payee_payer" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="Swiggy, client name, etc." />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-muted mb-1.5">Reference</label>
           <input name="reference" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />

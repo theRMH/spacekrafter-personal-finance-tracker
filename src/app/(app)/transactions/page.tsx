@@ -49,7 +49,7 @@ export default async function TransactionsPage({
 
   return (
     <div>
-      <div className="flex justify-between items-start gap-4 mb-6">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-navy">Transactions</h1>
           <p className="text-sm text-muted mt-1">All imported, manual, pending and matched money movements</p>

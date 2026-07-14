@@ -112,7 +112,7 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
         <h3 className="text-sm font-bold text-navy mb-1">Add investment</h3>
         <p className="text-xs text-muted mb-4">Fill the Mutual Fund or Share section only if that&apos;s the type you select.</p>
         <form action={createInvestment} className="grid gap-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-muted mb-1.5">Investment type</label>
               <select name="investment_type" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
@@ -125,7 +125,7 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs text-muted mb-1.5">Invested amount (₹)</label>
               <input name="invested_amount" type="number" step="0.01" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
@@ -140,7 +140,7 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs text-muted mb-1.5">Start date</label>
               <input name="start_date" type="date" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
@@ -160,7 +160,7 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
 
           <fieldset className="border border-[#e3ddd7] rounded-xl p-4">
             <legend className="text-xs font-bold text-navy px-1">Mutual Fund fields (only if type = Mutual Funds)</legend>
-            <div className="grid grid-cols-3 gap-3 mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
               <input name="amc" placeholder="AMC / fund company" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
               <input name="scheme_name" placeholder="Scheme name" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
               <select name="mf_category" className="border border-[#e3ddd7] rounded-lg p-2 text-xs">
@@ -185,7 +185,7 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
 
           <fieldset className="border border-[#e3ddd7] rounded-xl p-4">
             <legend className="text-xs font-bold text-navy px-1">Share fields (only if type = Shares)</legend>
-            <div className="grid grid-cols-3 gap-3 mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
               <input name="company_name" placeholder="Company name" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
               <input name="symbol" placeholder="Symbol" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
               <input name="sector" placeholder="Sector" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />

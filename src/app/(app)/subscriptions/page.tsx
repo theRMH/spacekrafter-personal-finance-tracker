@@ -89,7 +89,7 @@ export default async function SubscriptionsPage() {
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6 max-w-2xl">
         <h3 className="text-sm font-bold text-navy mb-4">Add subscription</h3>
-        <form action={createSubscription} className="grid grid-cols-2 gap-4">
+        <form action={createSubscription} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="col-span-2">
             <label className="block text-xs text-muted mb-1.5">Name</label>
             <input name="name" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="Netflix" />

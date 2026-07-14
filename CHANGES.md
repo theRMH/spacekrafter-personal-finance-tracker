@@ -4,6 +4,22 @@ Per-session changelog for this project. See `CLAUDE.md` for the logging format a
 
 ## 2026-07-14
 
+### Full mobile-responsiveness pass
+**Commit:** Uncommitted
+- **Added:** `src/app/(app)/app-shell.tsx` — client component holding mobile nav-drawer state (open/close, closes on route change, locks body scroll while open). `layout.tsx` now stays server-side for data fetching and delegates rendering to this.
+- **Changed:** `src/app/(app)/layout.tsx` — sidebar/topbar/main rendering moved into `AppShell`; layout.tsx now just fetches user/profile/pending-approvals and passes them down.
+- **Changed:** `src/app/(app)/topbar.tsx` — added a hamburger button (`md:hidden`) wired to the drawer; profile chip's name text now hides below `sm` (icon-only) so it doesn't crowd the hamburger + icon buttons on narrow screens.
+- **Fixed root cause:** the sidebar previously had no mobile behavior at all — `grid md:grid-cols-[268px_1fr]` with no base `grid-cols` meant the full 15-item sidebar just stacked *above* the page content below the `md` breakpoint, forcing a scroll past the entire nav to reach any page. Sidebar is now a proper off-canvas drawer on mobile (fixed position, slide-in/out, backdrop, closes on nav or tap-outside) while staying exactly as before on desktop.
+- **Changed:** `src/app/login/page.tsx` — added a compact brand header (logo + "Spacekrafter") visible only on mobile, since the desktop marketing panel is intentionally hidden below `md` and previously left mobile with zero brand identity.
+- **Changed:** form grids across `add-entry/entry-form.tsx`, `insurance/page.tsx`, `utilities/page.tsx`, `subscriptions/page.tsx`, `investments/page.tsx` (incl. Mutual Fund/Share fieldsets), `plans/page.tsx`, `accounts/page.tsx`, `settings/page.tsx` — every fixed `grid-cols-2`/`grid-cols-3` used for form fields now starts single-column and expands at `sm:`, so phone-width forms don't cram into unreadable columns.
+- **Changed:** `dashboard/page.tsx` — spend-split donut layout (`grid-cols-[150px_1fr]`) now stacks (donut above, legend below) below `sm`; page-header button rows across dashboard/plans/accounts/reports/transactions now `flex-wrap` instead of squeezing on narrow screens.
+- **Changed:** `calendar/page.tsx` — day-cell min-height and padding scale down below `sm`, event-name text hides on the smallest screens (leaving just the colour dot) so a week of the month grid doesn't force excessive scrolling on a phone.
+- **Fixed:** `settings/page.tsx` — two "add" forms (new category, new subcategory) used a non-wrapping `flex` row; on mobile the `<select>`/`<input>` combined min-content width overflowed the viewport by ~147px, stretching the whole page horizontally. Added `flex-wrap` + `min-w-[140px]` — confirmed down to 1px (rounding) overflow.
+- **Added:** `scripts/verify-mobile.mjs` — Playwright pass at a 390×844 (phone-sized) viewport across all 16 pages, measuring `document.documentElement.scrollWidth` vs viewport width per page (catches horizontal overflow), plus a drawer open/close/close-on-navigate check. All 16 pages confirmed at 0px (or ~0px) overflow after fixes. Re-checked desktop viewport afterward — no regression.
+- **Kept as-is (by design, not a bug):** dense data tables (Transactions, Reports, Import history, etc.) still scroll horizontally within their own card wrapper on narrow screens rather than reflowing into stacked cards — a standard, acceptable mobile pattern for this kind of dense financial data; verified the scroll stays contained to each table and never forces the whole page to scroll sideways.
+
+**⚠ Redeploy needed:** these are all frontend-only changes (no migrations) — push to `main` and Vercel will redeploy automatically.
+
 ### App renamed to Spacekrafter Personal Finance Tracker
 **Commit:** Uncommitted
 - **Changed:** `package.json` (`name`), `src/app/layout.tsx` (page title metadata), `src/app/(app)/layout.tsx` (sidebar brand block + brandmark), `src/app/login/page.tsx` (login screen brand block + brandmark) — renamed from "Personal Finance Hub" to "Spacekrafter" / "Personal Finance Tracker", brandmark initials `PF` → `SP`.

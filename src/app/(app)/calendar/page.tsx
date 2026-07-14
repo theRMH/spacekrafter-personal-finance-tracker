@@ -112,22 +112,22 @@ export default async function CalendarPage({ searchParams }: { searchParams: { y
         <div className="border border-[#e3ddd7] rounded-2xl overflow-hidden bg-[#e3ddd7]">
           <div className="grid grid-cols-7 gap-px bg-[#e3ddd7]">
             {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d) => (
-              <div key={d} className="bg-[#f3f1ee] text-earth text-[9px] font-bold uppercase text-center p-2">{d}</div>
+              <div key={d} className="bg-[#f3f1ee] text-earth text-[8px] sm:text-[9px] font-bold uppercase text-center p-1 sm:p-2">{d}</div>
             ))}
             {cells.map((day, idx) => {
               const isToday = day && year === now.getFullYear() && month === now.getMonth() + 1 && day === now.getDate();
               const items = day ? byDay.get(day) || [] : [];
               return (
-                <div key={idx} className={`bg-white min-h-[92px] p-2 text-[10px] ${!day ? "bg-[#faf9f7]" : ""}`}>
+                <div key={idx} className={`bg-white min-h-[54px] sm:min-h-[92px] p-1 sm:p-2 text-[10px] ${!day ? "bg-[#faf9f7]" : ""}`}>
                   {day && (
-                    <span className={`inline-grid place-items-center w-6 h-6 rounded-full text-[10px] font-bold ${isToday ? "bg-info text-white" : ""}`}>
+                    <span className={`inline-grid place-items-center w-5 h-5 sm:w-6 sm:h-6 rounded-full text-[9px] sm:text-[10px] font-bold ${isToday ? "bg-info text-white" : ""}`}>
                       {day}
                     </span>
                   )}
                   {items.slice(0, 3).map((c) => (
                     <div key={c.id} className="flex items-center gap-1 mt-1 truncate">
-                      <span className={`w-1.5 h-1.5 rounded-full ${TYPE_DOT[c.commitment_type] || "bg-muted"}`} />
-                      <span className="truncate">{c.name}</span>
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${TYPE_DOT[c.commitment_type] || "bg-muted"}`} />
+                      <span className="truncate hidden sm:inline text-[9px]">{c.name}</span>
                     </div>
                   ))}
                 </div>

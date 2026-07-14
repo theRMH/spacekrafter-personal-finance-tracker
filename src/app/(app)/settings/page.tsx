@@ -32,8 +32,8 @@ export default async function SettingsPage() {
                 </form>
               ))}
             </div>
-            <form action={createCategory} className="flex gap-2">
-              <input name="group_name" required placeholder="New category group" className="flex-1 border border-[#e3ddd7] rounded-xl p-2 text-xs" />
+            <form action={createCategory} className="flex flex-wrap gap-2">
+              <input name="group_name" required placeholder="New category group" className="flex-1 min-w-[140px] border border-[#e3ddd7] rounded-xl p-2 text-xs" />
               <select name="default_personal_or_office" className="border border-[#e3ddd7] rounded-xl p-2 text-xs">
                 <option value="">Default usage</option>
                 <option value="personal">Personal</option>
@@ -51,12 +51,12 @@ export default async function SettingsPage() {
                 </div>
               ))}
             </div>
-            <form action={createSubcategory} className="flex gap-2">
-              <select name="category_id" required className="border border-[#e3ddd7] rounded-xl p-2 text-xs">
+            <form action={createSubcategory} className="flex flex-wrap gap-2">
+              <select name="category_id" required className="border border-[#e3ddd7] rounded-xl p-2 text-xs max-w-full">
                 <option value="">Category…</option>
                 {(categories || []).map((c) => <option key={c.id} value={c.id}>{c.group_name}</option>)}
               </select>
-              <input name="name" required placeholder="New subcategory" className="flex-1 border border-[#e3ddd7] rounded-xl p-2 text-xs" />
+              <input name="name" required placeholder="New subcategory" className="flex-1 min-w-[140px] border border-[#e3ddd7] rounded-xl p-2 text-xs" />
               <button type="submit" className="bg-navy text-white rounded-xl px-3 text-xs font-semibold">Add</button>
             </form>
           </div>
@@ -101,7 +101,7 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         </div>
-        <form action={createCategoryRule} className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <form action={createCategoryRule} className="grid grid-cols-1 sm:grid-cols-5 gap-2">
           <input name="keyword" required placeholder="Keyword e.g. SWIGGY" className="border border-[#e3ddd7] rounded-xl p-2 text-xs" />
           <select name="category_id" required className="border border-[#e3ddd7] rounded-xl p-2 text-xs">
             <option value="">Category…</option>

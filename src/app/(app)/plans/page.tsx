@@ -62,7 +62,7 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
 
   return (
     <div>
-      <div className="flex justify-between items-start gap-4 mb-6">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-navy">Plans and Projections</h1>
           <p className="text-sm text-muted mt-1">Income, home, office and investment plans with actual variance</p>
@@ -108,7 +108,7 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6 max-w-2xl">
         <h3 className="text-sm font-bold text-navy mb-4">Set projections for {MONTH_NAMES[month - 1]} {year}</h3>
-        <form action={savePlans} className="grid grid-cols-2 gap-4">
+        <form action={savePlans} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <input type="hidden" name="financial_year" value={year} />
           <input type="hidden" name="month" value={month} />
           {PLAN_TYPES.map((p) => (

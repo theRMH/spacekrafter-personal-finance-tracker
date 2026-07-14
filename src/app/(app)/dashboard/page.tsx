@@ -142,7 +142,7 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-start gap-4 mb-6">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-navy">Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {firstName}</h1>
           <p className="text-sm text-muted mt-1">Your complete financial position at a glance</p>
@@ -192,7 +192,7 @@ export default async function DashboardPage() {
             <h3 className="text-sm font-bold text-navy">Spend split</h3>
             <span className="text-[11px] text-muted">This month</span>
           </div>
-          <div className="grid grid-cols-[150px_1fr] items-center gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] items-center gap-3">
             <div className="relative w-[150px] h-[150px] rounded-full mx-auto" style={{ background: donutGradient }}>
               <div className="absolute inset-[26px] bg-white rounded-full grid place-items-center text-center">
                 <div>
