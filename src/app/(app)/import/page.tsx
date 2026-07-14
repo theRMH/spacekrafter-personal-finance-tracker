@@ -5,13 +5,15 @@ import UploadForm from "./upload-form";
 export default async function ImportPage() {
   const supabase = createClient();
 
-  const { data: accounts } = await supabase.from("accounts").select("id, name").order("name");
-  const { data: mappings } = await supabase.from("import_mappings").select("account_id, column_mapping");
-  const { data: batches } = await supabase
-    .from("import_batches")
-    .select("id, file_name, total_rows, accepted, duplicates, transfers, matched, unknown, rejected, created_at, accounts(name)")
-    .order("created_at", { ascending: false })
-    .limit(10);
+  const [{ data: accounts }, { data: mappings }, { data: batches }] = await Promise.all([
+    supabase.from("accounts").select("id, name").order("name"),
+    supabase.from("import_mappings").select("account_id, column_mapping"),
+    supabase
+      .from("import_batches")
+      .select("id, file_name, total_rows, accepted, duplicates, transfers, matched, unknown, rejected, created_at, accounts(name)")
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
 
   const savedMappings = Object.fromEntries((mappings || []).map((m) => [m.account_id, m.column_mapping]));
 

@@ -4,18 +4,22 @@ import AppShell from "./app-shell";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+
+  // Runs on every page load — fire the user check and the approvals badge
+  // count together instead of one after another.
+  const [
+    {
+      data: { user },
+    },
+    { count: pendingApprovals },
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+  ]);
 
   const { data: profile } = user
     ? await supabase.from("profiles").select("full_name").eq("id", user.id).single()
     : { data: null };
-
-  const { count: pendingApprovals } = await supabase
-    .from("approval_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
 
   const displayName = profile?.full_name || user?.email || "Owner";
   const initials = displayName

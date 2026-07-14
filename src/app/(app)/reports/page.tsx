@@ -16,11 +16,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: { ta
   const supabase = createClient();
   const tab = searchParams?.tab || "overview";
 
-  const { data: allTx } = await supabase
-    .from("transactions")
-    .select("amount, type, personal_or_office, payee_payer, transaction_date, status, accounts(name), categories(group_name)")
-    .is("deleted_at", null)
-    .eq("status", "confirmed");
+  // Only overview/spend/counterparty use this — skip the round-trip on the other tabs.
+  const needsTx = tab === "overview" || tab === "spend" || tab === "counterparty";
+  const { data: allTx } = needsTx
+    ? await supabase
+        .from("transactions")
+        .select("amount, type, personal_or_office, payee_payer, transaction_date, status, accounts(name), categories(group_name)")
+        .is("deleted_at", null)
+        .eq("status", "confirmed")
+    : { data: null };
 
   const tx = allTx || [];
 
@@ -152,8 +156,10 @@ function CounterpartyTab({ tx }: { tx: any[] }) {
 }
 
 async function AccountsTab({ supabase }: { supabase: any }) {
-  const { data: accounts } = await supabase.from("accounts").select("id, name, opening_balance, statement_closing_balance, reconciliation_status, last_imported_at");
-  const { data: allTx } = await supabase.from("transactions").select("account_id, amount, type").eq("status", "confirmed").is("deleted_at", null);
+  const [{ data: accounts }, { data: allTx }] = await Promise.all([
+    supabase.from("accounts").select("id, name, opening_balance, statement_closing_balance, reconciliation_status, last_imported_at"),
+    supabase.from("transactions").select("account_id, amount, type").eq("status", "confirmed").is("deleted_at", null),
+  ]);
 
   const movement = new Map<string, number>();
   for (const t of allTx || []) {
@@ -254,9 +260,11 @@ async function InvestmentsTab({ supabase }: { supabase: any }) {
 }
 
 async function OperationsTab({ supabase }: { supabase: any }) {
-  const { count: needsReview } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("status", "needs_review").is("deleted_at", null);
-  const { data: batches } = await supabase.from("import_batches").select("id, file_name, created_at, accepted, unknown").order("created_at", { ascending: false }).limit(10);
-  const { data: auditLog } = await supabase.from("audit_log").select("id, action, entity_table, created_at").order("created_at", { ascending: false }).limit(10);
+  const [{ count: needsReview }, { data: batches }, { data: auditLog }] = await Promise.all([
+    supabase.from("transactions").select("id", { count: "exact", head: true }).eq("status", "needs_review").is("deleted_at", null),
+    supabase.from("import_batches").select("id, file_name, created_at, accepted, unknown").order("created_at", { ascending: false }).limit(10),
+    supabase.from("audit_log").select("id, action, entity_table, created_at").order("created_at", { ascending: false }).limit(10),
+  ]);
 
   return (
     <div className="grid gap-6">

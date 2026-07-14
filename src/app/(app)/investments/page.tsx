@@ -24,10 +24,12 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
     .select("id, investment_type, name, invested_amount, current_value, valuation_date, linked_account_id, mutual_fund_details(amc, scheme_name, category, folio_number), share_details(company_name, quantity, average_purchase_price)")
     .order("created_at", { ascending: false });
   if (activeType) query = query.eq("investment_type", activeType);
-  const { data: investments } = await query;
 
-  const { data: allInvestments } = await supabase.from("investments").select("investment_type, invested_amount, current_value");
-  const { data: accounts } = await supabase.from("accounts").select("id, name").order("name");
+  const [{ data: investments }, { data: allInvestments }, { data: accounts }] = await Promise.all([
+    query,
+    supabase.from("investments").select("investment_type, invested_amount, current_value"),
+    supabase.from("accounts").select("id, name").order("name"),
+  ]);
 
   const totalInvested = (allInvestments || []).reduce((s, i) => s + Number(i.invested_amount || 0), 0);
   const totalCurrent = (allInvestments || []).reduce((s, i) => s + Number(i.current_value || i.invested_amount || 0), 0);

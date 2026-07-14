@@ -35,10 +35,11 @@ export default async function TransactionsPage({
 
   if (statusFilter) query = query.eq("status", statusFilter);
 
-  const { data: transactions } = await query;
-
-  const { data: categories } = await supabase.from("categories").select("id, group_name").order("group_name");
-  const { data: subcategories } = await supabase.from("subcategories").select("id, name, category_id").order("name");
+  const [{ data: transactions }, { data: categories }, { data: subcategories }] = await Promise.all([
+    query,
+    supabase.from("categories").select("id, group_name").order("group_name"),
+    supabase.from("subcategories").select("id, name, category_id").order("name"),
+  ]);
 
   const filters = [
     { label: "All", href: "/transactions" },

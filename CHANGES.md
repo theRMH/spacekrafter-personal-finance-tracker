@@ -4,6 +4,17 @@ Per-session changelog for this project. See `CLAUDE.md` for the logging format a
 
 ## 2026-07-14
 
+### Performance: colocate Vercel with Supabase's region + parallelize queries
+**Commit:** Uncommitted
+- **Added:** `vercel.json` — pins serverless functions to `hnd1` (Tokyo), matching the Supabase project's `ap-northeast-1` region. Diagnosis: with no region set, Vercel defaults to a US region, so every Supabase call on every page was making a full Pacific round-trip. This is the single biggest lever — it doesn't reduce in local dev testing (this machine isn't in either region), so its effect will only show once redeployed to Vercel.
+- **Changed:** `src/app/(app)/dashboard/page.tsx` — 8 sequential `await supabase...` calls collapsed into one `Promise.all` (plus the one unavoidable `getUser()` that a later query depends on). Also deleted a duplicate "upcoming commitments" query block that was left over from an earlier edit.
+- **Changed:** `src/app/(app)/reports/page.tsx` — the page-level transaction query now only runs for the 3 tabs that actually use it (`overview`/`spend`/`counterparty`), skipping a wasted round-trip on the other 4 tabs; `AccountsTab` and `OperationsTab` each had 2-3 sequential queries parallelized.
+- **Changed:** `src/app/(app)/investments/page.tsx`, `import/page.tsx`, `transactions/page.tsx`, `(app)/layout.tsx` — same treatment: independent queries that were `await`-ed one after another now fire together via `Promise.all`. `layout.tsx` matters most since it runs on **every** page load.
+- **Verified:** rebuilt clean (`npm run build`), and a Playwright pass across all newly-changed pages (dashboard, all 7 report tabs, transactions, investments, import) showed zero console errors and identical rendered data to before — this was a pure data-fetching reorder, no behavior change.
+- **Not done (noted, not a regression):** did not attempt to eliminate the second `auth.getUser()` call that both `middleware.ts` and `layout.tsx` make on every request (middleware validates for the redirect gate, layout re-validates to get the user id for its own queries). Passing the validated user through via a request header would save one more round-trip per navigation, but it's a real auth-flow change with more risk — flagging as a possible follow-up rather than doing it opportunistically here.
+
+**⚠ Redeploy needed:** push to `main` for Vercel to pick up `vercel.json` and redeploy in the Tokyo region — this is where most of the actual speed-up will be felt, not in local testing.
+
 ### Full mobile-responsiveness pass
 **Commit:** Uncommitted
 - **Added:** `src/app/(app)/app-shell.tsx` — client component holding mobile nav-drawer state (open/close, closes on route change, locks body scroll while open). `layout.tsx` now stays server-side for data fetching and delegates rendering to this.

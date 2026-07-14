@@ -15,13 +15,49 @@ export default async function DashboardPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: profile } = user
-    ? await supabase.from("profiles").select("full_name").eq("id", user.id).single()
-    : { data: null };
-  const firstName = (profile?.full_name || "Owner").split(" ")[0];
 
-  const { data: accounts } = await supabase.from("accounts").select("id, opening_balance, active");
-  const movementByAccount = await getAccountMovements(supabase);
+  // Last 6 months of confirmed transactions for the trend chart + current-month breakdowns.
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1);
+
+  const thirtyDaysOut = new Date();
+  thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30);
+
+  // Fired together instead of one-by-one — each round-trip to Supabase costs real
+  // latency, so independent queries always run in parallel, not sequentially.
+  const [
+    { data: profile },
+    { data: accounts },
+    movementByAccount,
+    { data: rangeTx },
+    { data: upcoming },
+    { count: needsReviewCount },
+    { count: provisionalCount },
+    { count: pendingApprovals },
+  ] = await Promise.all([
+    user ? supabase.from("profiles").select("full_name").eq("id", user.id).single() : Promise.resolve({ data: null }),
+    supabase.from("accounts").select("id, opening_balance, active"),
+    getAccountMovements(supabase),
+    supabase
+      .from("transactions")
+      .select("amount, type, personal_or_office, payee_payer, transaction_date, categories(group_name)")
+      .eq("status", "confirmed")
+      .is("deleted_at", null)
+      .gte("transaction_date", sixMonthsAgo.toISOString().slice(0, 10)),
+    supabase
+      .from("commitments")
+      .select("id, name, due_date, expected_amount")
+      .in("status", ["upcoming", "due", "overdue"])
+      .lte("due_date", thirtyDaysOut.toISOString().slice(0, 10))
+      .order("due_date")
+      .limit(3),
+    supabase.from("transactions").select("id", { count: "exact", head: true }).eq("status", "needs_review").is("deleted_at", null),
+    supabase.from("transactions").select("id", { count: "exact", head: true }).eq("status", "provisional").is("deleted_at", null),
+    supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+  ]);
+
+  const firstName = (profile?.full_name || "Owner").split(" ")[0];
 
   const activeAccountIds = new Set((accounts || []).filter((a) => a.active).map((a) => a.id));
   const openingByAccount = new Map((accounts || []).map((a) => [a.id, Number(a.opening_balance)]));
@@ -30,18 +66,6 @@ export default async function DashboardPage() {
   for (const id of activeAccountIds) {
     totalBalance += (openingByAccount.get(id) || 0) + (movementByAccount.get(id) || 0);
   }
-
-  // Last 6 months of confirmed transactions for the trend chart + current-month breakdowns.
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-  sixMonthsAgo.setDate(1);
-
-  const { data: rangeTx } = await supabase
-    .from("transactions")
-    .select("amount, type, personal_or_office, payee_payer, transaction_date, categories(group_name)")
-    .eq("status", "confirmed")
-    .is("deleted_at", null)
-    .gte("transaction_date", sixMonthsAgo.toISOString().slice(0, 10));
 
   const allTx = rangeTx || [];
   const monthStart = startOfMonth(new Date());
@@ -113,21 +137,6 @@ export default async function DashboardPage() {
     byPayee.set(key, { amount: cur.amount + Number(t.amount), count: cur.count + 1 });
   }
   const topPayees = Array.from(byPayee.entries()).sort((a, b) => b[1].amount - a[1].amount).slice(0, 3);
-
-  // Upcoming commitments (30 days)
-  const thirtyDaysOut = new Date();
-  thirtyDaysOut.setDate(thirtyDaysOut.getDate() + 30);
-  const { data: upcoming } = await supabase
-    .from("commitments")
-    .select("id, name, due_date, expected_amount")
-    .in("status", ["upcoming", "due", "overdue"])
-    .lte("due_date", thirtyDaysOut.toISOString().slice(0, 10))
-    .order("due_date")
-    .limit(3);
-
-  const { count: needsReviewCount } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("status", "needs_review").is("deleted_at", null);
-  const { count: provisionalCount } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("status", "provisional").is("deleted_at", null);
-  const { count: pendingApprovals } = await supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("status", "pending");
 
   const attention = [
     { label: "Uncategorised / needs review", sub: "Imported rows", count: needsReviewCount || 0, style: "warn", href: "/transactions?status=needs_review" },
