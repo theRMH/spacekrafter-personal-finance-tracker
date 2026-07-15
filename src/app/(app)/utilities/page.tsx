@@ -1,11 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatInr, formatDate } from "@/lib/format";
 import { commitmentDisplayStatus, STATUS_STYLE } from "@/lib/commitments";
-import { createUtilityConnection } from "./actions";
 import { markCommitmentPaid } from "../insurance/actions";
-
-const UTILITY_TYPES = ["Electricity", "Gas/LPG", "Water", "Internet", "Mobile", "Cable/DTH", "Maintenance"];
-const LOCATIONS = ["Home", "Office", "Additional Residence", "Rental Property", "Business Location"];
+import AddConnectionForm from "./add-connection-form";
 
 export default async function UtilitiesPage() {
   const supabase = createClient();
@@ -71,70 +68,7 @@ export default async function UtilitiesPage() {
         </table>
       </div>
 
-      <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6 max-w-2xl">
-        <h3 className="text-sm font-bold text-navy mb-4">Add connection</h3>
-        <form action={createUtilityConnection} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <label className="block text-xs text-muted mb-1.5">Connection name</label>
-            <input name="name" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="Home electricity" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Utility type</label>
-            <select name="utility_type" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-              {UTILITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Location</label>
-            <select name="location" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-              {LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Provider</label>
-            <input name="provider" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Consumer number</label>
-            <input name="consumer_number" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Billing cycle</label>
-            <select name="billing_cycle" className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="custom">Custom</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Expected amount (₹)</label>
-            <input name="expected_amount" type="number" step="0.01" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Due date</label>
-            <input name="due_date" type="date" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Personal / Office</label>
-            <select name="personal_or_office" className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-              <option value="personal">Personal</option>
-              <option value="office">Office</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Linked account</label>
-            <select name="linked_account_id" className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-              <option value="">-</option>
-              {(accounts || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <div className="col-span-2">
-            <button type="submit" className="bg-navy text-white font-semibold rounded-xl py-2.5 text-sm w-full">
-              + Add connection
-            </button>
-          </div>
-        </form>
-      </div>
+      <AddConnectionForm accounts={accounts || []} />
     </div>
   );
 }

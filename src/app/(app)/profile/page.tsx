@@ -1,13 +1,15 @@
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { updateProfileName, changePassword } from "./actions";
 
 export default async function ProfilePage() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: profile } = user
-    ? await supabase.from("profiles").select("full_name, role, created_at").eq("id", user.id).single()
+  // Middleware already verified this user and forwards the id/email — skip a second
+  // round trip to Supabase Auth just to re-derive it on every page load.
+  const userId = headers().get("x-user-id");
+  const userEmail = headers().get("x-user-email");
+  const { data: profile } = userId
+    ? await supabase.from("profiles").select("full_name, role, created_at").eq("id", userId).single()
     : { data: null };
 
   const initials = (profile?.full_name || "Owner")
@@ -26,7 +28,7 @@ export default async function ProfilePage() {
         <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6 text-center h-fit">
           <div className="w-20 h-20 rounded-full bg-success grid place-items-center font-bold text-2xl mx-auto mb-3">{initials}</div>
           <h3 className="font-bold text-navy">{profile?.full_name}</h3>
-          <p className="text-xs text-muted mt-1">{user?.email}</p>
+          <p className="text-xs text-muted mt-1">{userEmail}</p>
           <span className="inline-block mt-3 rounded-full bg-[#edf1f7] text-info px-3 py-1 text-[11px] font-bold capitalize">
             {profile?.role ?? "owner"}
           </span>
@@ -42,7 +44,7 @@ export default async function ProfilePage() {
               </div>
               <div>
                 <label className="block text-xs text-muted mb-1.5">Email</label>
-                <input value={user?.email} disabled className="w-full border border-[#e3ddd7] rounded-xl p-2.5 bg-[#faf9f7] text-muted" />
+                <input value={userEmail ?? ""} disabled className="w-full border border-[#e3ddd7] rounded-xl p-2.5 bg-[#faf9f7] text-muted" />
               </div>
               <button type="submit" className="bg-navy text-white font-semibold rounded-xl py-2.5 text-sm">Save</button>
             </form>

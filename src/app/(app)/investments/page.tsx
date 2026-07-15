@@ -1,7 +1,20 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatInr, formatDate } from "@/lib/format";
-import { createInvestment, updateCurrentValue } from "./actions";
+import { updateCurrentValue } from "./actions";
+import AddInvestmentForm from "./add-investment-form";
+import AddMutualFundForm from "./add-mutual-fund-form";
+import AddShareForm from "./add-share-form";
+import AddSimpleInvestmentForm from "./add-simple-investment-form";
+
+const SIMPLE_TYPE_META: Record<string, { label: string; placeholder: string }> = {
+  fd_rd: { label: "Fixed Deposit / RD", placeholder: "HDFC FD #1" },
+  ppf_nps: { label: "PPF / NPS", placeholder: "PPF Account" },
+  gold_bond: { label: "Gold / Bond", placeholder: "Sovereign Gold Bond" },
+  real_estate: { label: "Real Estate", placeholder: "2BHK Whitefield" },
+  business_capital: { label: "Business Capital", placeholder: "Working capital reserve" },
+  other: { label: "Investment", placeholder: "Description" },
+};
 
 const SUBTABS = [
   { value: "", label: "Overview" },
@@ -110,104 +123,17 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
         </table>
       </div>
 
-      <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6 max-w-3xl">
-        <h3 className="text-sm font-bold text-navy mb-1">Add investment</h3>
-        <p className="text-xs text-muted mb-4">Fill the Mutual Fund or Share section only if that&apos;s the type you select.</p>
-        <form action={createInvestment} className="grid gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Investment type</label>
-              <select name="investment_type" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-                {SUBTABS.filter((t) => t.value).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Name</label>
-              <input name="name" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="Axis Bluechip Fund / Reliance shares / FD #1" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Invested amount (₹)</label>
-              <input name="invested_amount" type="number" step="0.01" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Current value (₹)</label>
-              <input name="current_value" type="number" step="0.01" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Valuation date</label>
-              <input name="valuation_date" type="date" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Start date</label>
-              <input name="start_date" type="date" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Maturity / goal date</label>
-              <input name="maturity_date" type="date" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Linked account</label>
-              <select name="linked_account_id" className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-                <option value="">-</option>
-                {(accounts || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <fieldset className="border border-[#e3ddd7] rounded-xl p-4">
-            <legend className="text-xs font-bold text-navy px-1">Mutual Fund fields (only if type = Mutual Funds)</legend>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
-              <input name="amc" placeholder="AMC / fund company" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="scheme_name" placeholder="Scheme name" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <select name="mf_category" className="border border-[#e3ddd7] rounded-lg p-2 text-xs">
-                <option value="">Category</option>
-                <option value="debt">Debt</option>
-                <option value="equity">Equity</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="elss">ELSS</option>
-              </select>
-              <input name="folio_number" placeholder="Folio number" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="agent_advisor" placeholder="Agent / advisor" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <select name="investment_mode" className="border border-[#e3ddd7] rounded-lg p-2 text-xs">
-                <option value="">SIP or Lump sum</option>
-                <option value="sip">SIP</option>
-                <option value="lump_sum">Lump Sum</option>
-              </select>
-              <input name="sip_amount" type="number" step="0.01" placeholder="SIP amount" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="sip_frequency" placeholder="SIP frequency" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="units" type="number" step="0.0001" placeholder="Units" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-            </div>
-          </fieldset>
-
-          <fieldset className="border border-[#e3ddd7] rounded-xl p-4">
-            <legend className="text-xs font-bold text-navy px-1">Share fields (only if type = Shares)</legend>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
-              <input name="company_name" placeholder="Company name" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="symbol" placeholder="Symbol" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="sector" placeholder="Sector" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="broker" placeholder="Broker" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="demat_account" placeholder="Demat account" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="quantity" type="number" step="0.0001" placeholder="Quantity" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-              <input name="average_purchase_price" type="number" step="0.01" placeholder="Average purchase price" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
-            </div>
-          </fieldset>
-
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Nominee</label>
-            <input name="nominee" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-          </div>
-
-          <button type="submit" className="bg-navy text-white font-semibold rounded-xl py-2.5 text-sm">
-            + Add investment
-          </button>
-        </form>
-      </div>
+      {activeType === "" && <AddInvestmentForm accounts={accounts || []} />}
+      {activeType === "mutual_fund" && <AddMutualFundForm accounts={accounts || []} />}
+      {activeType === "share" && <AddShareForm accounts={accounts || []} />}
+      {SIMPLE_TYPE_META[activeType] && (
+        <AddSimpleInvestmentForm
+          accounts={accounts || []}
+          investmentType={activeType}
+          label={SIMPLE_TYPE_META[activeType].label}
+          namePlaceholder={SIMPLE_TYPE_META[activeType].placeholder}
+        />
+      )}
     </div>
   );
 }

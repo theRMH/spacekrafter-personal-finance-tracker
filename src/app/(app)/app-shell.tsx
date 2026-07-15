@@ -6,16 +6,20 @@ import { usePathname } from "next/navigation";
 import { NAV_GROUPS } from "@/lib/nav";
 import Topbar from "./topbar";
 
+type DueTodayItem = { id: string; name: string; expected_amount: number | null };
+
 export default function AppShell({
   displayName,
   initials,
   pendingApprovals,
+  dueToday,
   signOutAction,
   children,
 }: {
   displayName: string;
   initials: string;
   pendingApprovals: number;
+  dueToday: DueTodayItem[];
   signOutAction: () => void;
   children: React.ReactNode;
 }) {
@@ -104,7 +108,13 @@ export default function AppShell({
       </aside>
 
       <div className="min-w-0 flex flex-col">
-        <Topbar displayName={displayName} initials={initials} onMenuClick={() => setNavOpen((v) => !v)} />
+        <Topbar
+          displayName={displayName}
+          initials={initials}
+          pendingApprovals={pendingApprovals}
+          dueToday={dueToday}
+          onMenuClick={() => setNavOpen((v) => !v)}
+        />
         <main className="flex-1 min-w-0">
           <div className="max-w-[1400px] mx-auto p-4 sm:p-7">{children}</div>
         </main>

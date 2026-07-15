@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getAccountMovements } from "@/lib/balances";
 import { formatInr, formatDate } from "@/lib/format";
@@ -19,10 +20,9 @@ const DONUT_COLORS = ["#181E32", "#3A71AA", "#56A688", "#CDC1B4", "#767678", "#6
 
 export default async function DashboardPage() {
   const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Middleware already verified this user and forwards the id — skip a second
+  // round trip to Supabase Auth just to re-derive it on every page load.
+  const userId = headers().get("x-user-id");
 
   // Last 6 months of confirmed transactions for the trend chart + current-month breakdowns.
   const sixMonthsAgo = new Date();
@@ -44,7 +44,7 @@ export default async function DashboardPage() {
     { count: provisionalCount },
     { count: pendingApprovals },
   ] = await Promise.all([
-    user ? supabase.from("profiles").select("full_name").eq("id", user.id).single() : Promise.resolve({ data: null }),
+    userId ? supabase.from("profiles").select("full_name").eq("id", userId).single() : Promise.resolve({ data: null }),
     supabase.from("accounts").select("id, opening_balance, active"),
     getAccountMovements(supabase),
     supabase

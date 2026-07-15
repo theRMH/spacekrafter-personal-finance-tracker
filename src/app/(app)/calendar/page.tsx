@@ -1,19 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { formatInr, formatDate } from "@/lib/format";
-import { commitmentDisplayStatus } from "@/lib/commitments";
+import CalendarView from "./calendar-view";
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
-const TYPE_DOT: Record<string, string> = {
-  insurance: "bg-earth",
-  utility: "bg-success",
-  subscription: "bg-info",
-  emi: "bg-[#a85f33]",
-  sip: "bg-navy",
-  expected_income: "bg-success",
-  other: "bg-muted",
-};
 
 export default async function CalendarPage({ searchParams }: { searchParams: { year?: string; month?: string; type?: string } }) {
   const supabase = createClient();
@@ -46,22 +35,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: { y
     { label: "Overdue", count: overdue.length },
     { label: "Expected income", count: expectedIncome.length },
   ];
-
-  // Month grid
-  const firstOfMonth = new Date(year, month - 1, 1);
-  const startDay = firstOfMonth.getDay();
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const cells: (number | null)[] = [...Array(startDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  const byDay = new Map<number, typeof all>();
-  for (const c of all) {
-    const d = new Date(c.due_date);
-    if (d.getFullYear() === year && d.getMonth() === month - 1) {
-      const day = d.getDate();
-      byDay.set(day, [...(byDay.get(day) || []), c]);
-    }
-  }
 
   const prevLink = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
   const nextLink = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
@@ -108,53 +81,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: { y
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-[1.7fr_1fr] gap-4">
-        <div className="border border-[#e3ddd7] rounded-2xl overflow-hidden bg-[#e3ddd7]">
-          <div className="grid grid-cols-7 gap-px bg-[#e3ddd7]">
-            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d) => (
-              <div key={d} className="bg-[#f3f1ee] text-earth text-[8px] sm:text-[9px] font-bold uppercase text-center p-1 sm:p-2">{d}</div>
-            ))}
-            {cells.map((day, idx) => {
-              const isToday = day && year === now.getFullYear() && month === now.getMonth() + 1 && day === now.getDate();
-              const items = day ? byDay.get(day) || [] : [];
-              return (
-                <div key={idx} className={`bg-white min-h-[54px] sm:min-h-[92px] p-1 sm:p-2 text-[10px] ${!day ? "bg-[#faf9f7]" : ""}`}>
-                  {day && (
-                    <span className={`inline-grid place-items-center w-5 h-5 sm:w-6 sm:h-6 rounded-full text-[9px] sm:text-[10px] font-bold ${isToday ? "bg-info text-white" : ""}`}>
-                      {day}
-                    </span>
-                  )}
-                  {items.slice(0, 3).map((c) => (
-                    <div key={c.id} className="flex items-center gap-1 mt-1 truncate">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${TYPE_DOT[c.commitment_type] || "bg-muted"}`} />
-                      <span className="truncate hidden sm:inline text-[9px]">{c.name}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-4">
-          <h3 className="text-sm font-bold text-navy mb-3">Agenda</h3>
-          <div className="grid gap-1">
-            {agendaItems.map((c) => {
-              const status = commitmentDisplayStatus(c.status, c.due_date);
-              return (
-                <div key={c.id} className="flex justify-between items-center py-2 border-b border-[#eeeae6] text-xs">
-                  <div>
-                    <div className="font-semibold">{c.name}</div>
-                    <div className="text-[10px] text-muted">{formatDate(c.due_date)} · {status}</div>
-                  </div>
-                  <div className="font-bold">{c.expected_amount ? formatInr(c.expected_amount) : "-"}</div>
-                </div>
-              );
-            })}
-            {agendaItems.length === 0 && <p className="text-xs text-muted">Nothing upcoming.</p>}
-          </div>
-        </div>
-      </div>
+      <CalendarView commitments={all} agendaItems={agendaItems} year={year} month={month} />
     </div>
   );
 }

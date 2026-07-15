@@ -1,27 +1,31 @@
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
 import AppShell from "./app-shell";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  // Middleware already verified this user and forwards the id — skip a second
+  // round trip to Supabase Auth just to re-derive it on every page load.
+  const userId = headers().get("x-user-id");
+  const userEmail = headers().get("x-user-email");
 
-  // Runs on every page load — fire the user check and the approvals badge
-  // count together instead of one after another.
   const [
-    {
-      data: { user },
-    },
+    { data: profile },
     { count: pendingApprovals },
+    { data: dueToday },
   ] = await Promise.all([
-    supabase.auth.getUser(),
+    userId ? supabase.from("profiles").select("full_name").eq("id", userId).single() : Promise.resolve({ data: null }),
     supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase
+      .from("commitments")
+      .select("id, name, expected_amount")
+      .eq("due_date", today)
+      .not("status", "in", "(paid,cancelled,expired,paused)"),
   ]);
 
-  const { data: profile } = user
-    ? await supabase.from("profiles").select("full_name").eq("id", user.id).single()
-    : { data: null };
-
-  const displayName = profile?.full_name || user?.email || "Owner";
+  const displayName = profile?.full_name || userEmail || "Owner";
   const initials = displayName
     .split(" ")
     .map((part: string) => part[0])
@@ -30,7 +34,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .toUpperCase();
 
   return (
-    <AppShell displayName={displayName} initials={initials} pendingApprovals={pendingApprovals || 0} signOutAction={signOut}>
+    <AppShell
+      displayName={displayName}
+      initials={initials}
+      pendingApprovals={pendingApprovals || 0}
+      dueToday={dueToday || []}
+      signOutAction={signOut}
+    >
       {children}
     </AppShell>
   );

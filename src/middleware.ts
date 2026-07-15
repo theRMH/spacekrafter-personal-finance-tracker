@@ -4,7 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_PATHS = ["/login"];
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request: { headers: request.headers } });
+  const requestHeaders = new Headers(request.headers);
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,6 +39,16 @@ export async function middleware(request: NextRequest) {
   if (user && isPublicPath) {
     const redirectUrl = new URL("/dashboard", request.url);
     return NextResponse.redirect(redirectUrl);
+  }
+
+  // Forward the identity middleware already verified so downstream Server Components
+  // don't need a second network round trip to Supabase Auth just to re-derive it.
+  if (user) {
+    requestHeaders.set("x-user-id", user.id);
+    requestHeaders.set("x-user-email", user.email ?? "");
+    const forwarded = NextResponse.next({ request: { headers: requestHeaders } });
+    response.cookies.getAll().forEach((cookie) => forwarded.cookies.set(cookie));
+    response = forwarded;
   }
 
   return response;

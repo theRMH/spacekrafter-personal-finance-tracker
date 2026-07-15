@@ -12,21 +12,82 @@ const TABS = [
   { value: "operations", label: "Operations" },
 ];
 
-export default async function ReportsPage({ searchParams }: { searchParams: { tab?: string } }) {
+const DONUT_COLORS = ["#181E32", "#3A71AA", "#56A688", "#CDC1B4", "#767678", "#6C6456"];
+
+function toIso(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+// Previous period of the same length immediately preceding `from`, for period-over-period deltas.
+function prevPeriodRange(from: string, to: string) {
+  const fromD = new Date(from);
+  const toD = new Date(to);
+  const lengthDays = Math.round((toD.getTime() - fromD.getTime()) / 86400000) + 1;
+  const prevTo = new Date(fromD);
+  prevTo.setDate(prevTo.getDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setDate(prevFrom.getDate() - (lengthDays - 1));
+  return { prevFrom: toIso(prevFrom), prevTo: toIso(prevTo) };
+}
+
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: { tab?: string; from?: string; to?: string; usage?: string };
+}) {
   const supabase = createClient();
   const tab = searchParams?.tab || "overview";
+  const fromDate = searchParams?.from;
+  const toDate = searchParams?.to;
+  const usageFilter = searchParams?.usage;
+  const hasRange = Boolean(fromDate && toDate);
 
   // Only overview/spend/counterparty use this — skip the round-trip on the other tabs.
   const needsTx = tab === "overview" || tab === "spend" || tab === "counterparty";
-  const { data: allTx } = needsTx
-    ? await supabase
+
+  function buildTxQuery() {
+    let q = supabase
+      .from("transactions")
+      .select("amount, type, personal_or_office, payee_payer, transaction_date, status, accounts(name), categories(group_name)")
+      .is("deleted_at", null)
+      .eq("status", "confirmed");
+    if (fromDate) q = q.gte("transaction_date", fromDate);
+    if (toDate) q = q.lte("transaction_date", toDate);
+    if (usageFilter) q = q.eq("personal_or_office", usageFilter);
+    return q;
+  }
+
+  let tx: any[] = [];
+  let prevTx: any[] = [];
+  if (needsTx) {
+    if (tab === "overview" && hasRange) {
+      const { prevFrom, prevTo } = prevPeriodRange(fromDate!, toDate!);
+      let prevQuery = supabase
         .from("transactions")
-        .select("amount, type, personal_or_office, payee_payer, transaction_date, status, accounts(name), categories(group_name)")
+        .select("amount, type, personal_or_office, transaction_date, status")
         .is("deleted_at", null)
         .eq("status", "confirmed")
-    : { data: null };
+        .gte("transaction_date", prevFrom)
+        .lte("transaction_date", prevTo);
+      if (usageFilter) prevQuery = prevQuery.eq("personal_or_office", usageFilter);
+      const [{ data: mainData }, { data: prevData }] = await Promise.all([buildTxQuery(), prevQuery]);
+      tx = mainData || [];
+      prevTx = prevData || [];
+    } else {
+      const { data } = await buildTxQuery();
+      tx = data || [];
+    }
+  }
 
-  const tx = allTx || [];
+  // Tab links and the filter form both need to preserve whichever of these are active.
+  function hrefForTab(tabValue: string) {
+    const params = new URLSearchParams();
+    params.set("tab", tabValue);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
+    if (usageFilter) params.set("usage", usageFilter);
+    return `/reports?${params.toString()}`;
+  }
 
   return (
     <div>
@@ -40,15 +101,46 @@ export default async function ReportsPage({ searchParams }: { searchParams: { ta
         </a>
       </div>
 
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex gap-2 mb-4 flex-wrap">
         {TABS.map((t) => (
-          <Link key={t.value} href={`/reports?tab=${t.value}`} className={`rounded-full px-3 py-2 text-xs border ${tab === t.value ? "bg-navy text-white border-navy" : "bg-white border-[#e3ddd7] text-navy"}`}>
+          <Link key={t.value} href={hrefForTab(t.value)} className={`rounded-full px-3 py-2 text-xs border ${tab === t.value ? "bg-navy text-white border-navy" : "bg-white border-[#e3ddd7] text-navy"}`}>
             {t.label}
           </Link>
         ))}
       </div>
 
-      {tab === "overview" && <OverviewTab tx={tx} />}
+      {needsTx && (
+        <form method="get" className="flex flex-wrap items-end gap-2 mb-6 bg-white border border-[#e3ddd7] rounded-xl p-3">
+          <input type="hidden" name="tab" value={tab} />
+          <div>
+            <label className="block text-[10px] text-muted mb-1">From</label>
+            <input type="date" name="from" defaultValue={fromDate} className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-muted mb-1">To</label>
+            <input type="date" name="to" defaultValue={toDate} className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-muted mb-1">Usage</label>
+            <select name="usage" defaultValue={usageFilter || ""} className="border border-[#e3ddd7] rounded-lg p-2 text-xs">
+              <option value="">All</option>
+              <option value="personal">Personal</option>
+              <option value="office">Office</option>
+              <option value="shared">Shared</option>
+            </select>
+          </div>
+          <button type="submit" className="bg-navy text-white rounded-lg px-4 py-2 text-xs font-semibold">
+            Apply
+          </button>
+          {(fromDate || toDate || usageFilter) && (
+            <Link href={`/reports?tab=${tab}`} className="text-[11px] text-muted underline px-1">
+              Clear filters
+            </Link>
+          )}
+        </form>
+      )}
+
+      {tab === "overview" && <OverviewTab tx={tx} prevTx={prevTx} hasRange={hasRange} />}
       {tab === "spend" && <SpendTab tx={tx} />}
       {tab === "counterparty" && <CounterpartyTab tx={tx} />}
       {tab === "accounts" && <AccountsTab supabase={supabase} />}
@@ -59,18 +151,34 @@ export default async function ReportsPage({ searchParams }: { searchParams: { ta
   );
 }
 
-function OverviewTab({ tx }: { tx: any[] }) {
-  const income = tx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
-  const expense = tx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
-  const personalSpend = tx.filter((t) => t.type === "expense" && t.personal_or_office === "personal").reduce((s, t) => s + Number(t.amount), 0);
-  const officeSpend = tx.filter((t) => t.type === "expense" && t.personal_or_office === "office").reduce((s, t) => s + Number(t.amount), 0);
+function sumBy(tx: any[], type: string, usage?: string) {
+  return tx.filter((t) => t.type === type && (!usage || t.personal_or_office === usage)).reduce((s, t) => s + Number(t.amount), 0);
+}
+
+function OverviewTab({ tx, prevTx, hasRange }: { tx: any[]; prevTx: any[]; hasRange: boolean }) {
+  const income = sumBy(tx, "income");
+  const expense = sumBy(tx, "expense");
+  const personalSpend = sumBy(tx, "expense", "personal");
+  const officeSpend = sumBy(tx, "expense", "office");
+
+  const prevIncome = sumBy(prevTx, "income");
+  const prevExpense = sumBy(prevTx, "expense");
+  const prevPersonalSpend = sumBy(prevTx, "expense", "personal");
+  const prevOfficeSpend = sumBy(prevTx, "expense", "office");
+
+  function delta(current: number, previous: number) {
+    if (!hasRange) return null;
+    if (previous === 0) return current === 0 ? null : "New";
+    const pct = ((current - previous) / previous) * 100;
+    return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs previous period`;
+  }
 
   const cards = [
-    { label: "Total income", value: income },
-    { label: "Total expenses", value: expense },
-    { label: "Net cash flow", value: income - expense },
-    { label: "Personal spend", value: personalSpend },
-    { label: "Office spend", value: officeSpend },
+    { label: "Total income", value: income, delta: delta(income, prevIncome) },
+    { label: "Total expenses", value: expense, delta: delta(expense, prevExpense) },
+    { label: "Net cash flow", value: income - expense, delta: delta(income - expense, prevIncome - prevExpense) },
+    { label: "Personal spend", value: personalSpend, delta: delta(personalSpend, prevPersonalSpend) },
+    { label: "Office spend", value: officeSpend, delta: delta(officeSpend, prevOfficeSpend) },
   ];
 
   return (
@@ -79,6 +187,11 @@ function OverviewTab({ tx }: { tx: any[] }) {
         <div key={c.label} className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-4">
           <div className="text-[11px] text-muted">{c.label}</div>
           <div className="text-lg font-extrabold text-navy mt-1">{formatInr(c.value)}</div>
+          {c.delta && (
+            <div className={`text-[10px] mt-1 font-semibold ${c.delta.startsWith("+") || c.delta === "New" ? "text-success" : c.delta.startsWith("-") ? "text-[#b64b52]" : "text-muted"}`}>
+              {c.delta}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -96,9 +209,21 @@ function SpendTab({ tx }: { tx: any[] }) {
   const total = expenses.reduce((s, t) => s + Number(t.amount), 0);
   const avgDaily = total / 30;
 
+  const highestExpense = expenses.reduce((max: any, t) => (!max || Number(t.amount) > Number(max.amount) ? t : max), null);
+
+  const byDay = new Map<string, number>();
+  for (const t of expenses) {
+    byDay.set(t.transaction_date, (byDay.get(t.transaction_date) || 0) + Number(t.amount));
+  }
+  const highestDay = Array.from(byDay.entries()).sort((a, b) => b[1] - a[1])[0];
+
+  const chartRows = rows.slice(0, 8);
+  const maxCat = Math.max(1, ...chartRows.map(([, amt]) => amt));
+  const barChartH = chartRows.length * 28 + 10;
+
   return (
     <div>
-      <div className="grid sm:grid-cols-2 gap-4 mb-6 max-w-lg">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-4">
           <div className="text-[11px] text-muted">Total spend</div>
           <div className="text-lg font-extrabold text-navy mt-1">{formatInr(total)}</div>
@@ -107,7 +232,37 @@ function SpendTab({ tx }: { tx: any[] }) {
           <div className="text-[11px] text-muted">Average daily spend (30d basis)</div>
           <div className="text-lg font-extrabold text-navy mt-1">{formatInr(avgDaily)}</div>
         </div>
+        <Link href={highestExpense?.payee_payer ? `/transactions?payee=${encodeURIComponent(highestExpense.payee_payer)}` : "/transactions"} className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-4 block hover:shadow-md transition-shadow">
+          <div className="text-[11px] text-muted">Highest single expense</div>
+          <div className="text-lg font-extrabold text-navy mt-1">{highestExpense ? formatInr(highestExpense.amount) : "-"}</div>
+          <div className="text-[10px] text-muted mt-1">{highestExpense?.payee_payer || "No expenses yet"}</div>
+        </Link>
+        <Link href={highestDay ? `/transactions?from=${highestDay[0]}&to=${highestDay[0]}` : "/transactions"} className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-4 block hover:shadow-md transition-shadow">
+          <div className="text-[11px] text-muted">Highest spend day</div>
+          <div className="text-lg font-extrabold text-navy mt-1">{highestDay ? formatInr(highestDay[1]) : "-"}</div>
+          <div className="text-[10px] text-muted mt-1">{highestDay ? formatDate(highestDay[0]) : "No expenses yet"}</div>
+        </Link>
       </div>
+
+      {chartRows.length > 0 && (
+        <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-4 mb-6">
+          <h3 className="text-sm font-bold text-navy mb-3">Spend by category</h3>
+          <svg viewBox={`0 0 640 ${barChartH}`} width="100%" height={barChartH}>
+            {chartRows.map(([cat, amt], i) => {
+              const barW = (amt / maxCat) * 480;
+              const y = i * 28;
+              return (
+                <g key={cat}>
+                  <text x="0" y={y + 14} className="text-[10px]" fill="#767678">{cat}</text>
+                  <rect x="130" y={y + 4} width={Math.max(2, barW)} height="16" rx="3" fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
+                  <text x={130 + barW + 8} y={y + 16} className="text-[10px] font-bold" fill="#181E32">{formatInr(amt)}</text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
+
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto">
         <table className="w-full text-xs">
           <thead><tr className="bg-[#faf9f7] text-muted uppercase text-[10px]"><th className="text-left p-3">Category</th><th className="text-right p-3">Amount</th><th className="text-right p-3">% of spend</th></tr></thead>
@@ -243,16 +398,24 @@ async function InvestmentsTab({ supabase }: { supabase: any }) {
   return (
     <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto">
       <table className="w-full text-xs">
-        <thead><tr className="bg-[#faf9f7] text-muted uppercase text-[10px]"><th className="text-left p-3">Type</th><th className="text-right p-3">Invested</th><th className="text-right p-3">Current value</th></tr></thead>
+        <thead><tr className="bg-[#faf9f7] text-muted uppercase text-[10px]"><th className="text-left p-3">Type</th><th className="text-right p-3">Invested</th><th className="text-right p-3">Current value</th><th className="text-right p-3">Gain / Loss</th></tr></thead>
         <tbody>
-          {Array.from(byType.entries()).map(([type, d]) => (
-            <tr key={type} className="border-t border-[#edf0ee]">
-              <td className="p-3 capitalize">{type.replace(/_/g, " ")}</td>
-              <td className="p-3 text-right">{formatInr(d.invested)}</td>
-              <td className="p-3 text-right">{formatInr(d.current)}</td>
-            </tr>
-          ))}
-          {(!investments || investments.length === 0) && <tr><td colSpan={3} className="p-6 text-center text-muted">No investments yet.</td></tr>}
+          {Array.from(byType.entries()).map(([type, d]) => {
+            const gain = d.current - d.invested;
+            const gainPct = d.invested ? (gain / d.invested) * 100 : 0;
+            const gainColor = gain > 0 ? "text-success" : gain < 0 ? "text-[#b64b52]" : "text-muted";
+            return (
+              <tr key={type} className="border-t border-[#edf0ee]">
+                <td className="p-3 capitalize">{type.replace(/_/g, " ")}</td>
+                <td className="p-3 text-right">{formatInr(d.invested)}</td>
+                <td className="p-3 text-right">{formatInr(d.current)}</td>
+                <td className={`p-3 text-right font-bold ${gainColor}`}>
+                  {d.invested ? `${gain >= 0 ? "+" : ""}${formatInr(gain)} (${gainPct >= 0 ? "+" : ""}${gainPct.toFixed(1)}%)` : "-"}
+                </td>
+              </tr>
+            );
+          })}
+          {(!investments || investments.length === 0) && <tr><td colSpan={4} className="p-6 text-center text-muted">No investments yet.</td></tr>}
         </tbody>
       </table>
     </div>

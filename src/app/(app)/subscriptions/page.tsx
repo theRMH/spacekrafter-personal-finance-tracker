@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatInr, formatDate } from "@/lib/format";
 import { commitmentDisplayStatus, STATUS_STYLE } from "@/lib/commitments";
-import { createSubscription, cancelSubscription } from "./actions";
+import { cancelSubscription, restartSubscription } from "./actions";
 import { markCommitmentPaid } from "../insurance/actions";
+import AddSubscriptionForm from "./add-subscription-form";
 
 export default async function SubscriptionsPage() {
   const supabase = createClient();
@@ -61,17 +62,31 @@ export default async function SubscriptionsPage() {
                   <td className="p-3">
                     <span className={`inline-flex rounded-full px-2 py-1 font-bold capitalize ${STATUS_STYLE[status]}`}>{status}</span>
                   </td>
-                  <td className="p-3 flex gap-2">
+                  <td className="p-3 min-w-[180px]">
                     {status !== "paid" && status !== "cancelled" && (
-                      <form action={markCommitmentPaid}>
+                      <form action={markCommitmentPaid} className="inline-block mr-2">
                         <input type="hidden" name="id" value={s.id} />
                         <button type="submit" className="text-info text-[11px] font-semibold">Mark paid</button>
                       </form>
                     )}
                     {status !== "cancelled" && (
-                      <form action={cancelSubscription}>
+                      <form action={cancelSubscription} className="inline-block">
                         <input type="hidden" name="id" value={s.id} />
                         <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">Cancel</button>
+                      </form>
+                    )}
+                    {status === "cancelled" && (
+                      <form action={restartSubscription} className="flex gap-1.5 items-center">
+                        <input type="hidden" name="id" value={s.id} />
+                        <input
+                          type="date"
+                          name="restart_date"
+                          required
+                          className="border border-[#e3ddd7] rounded-lg p-1.5 text-[11px]"
+                        />
+                        <button type="submit" className="bg-[#edf1f7] text-info rounded-lg px-2 py-1.5 text-[11px] font-semibold whitespace-nowrap">
+                          Restart
+                        </button>
                       </form>
                     )}
                   </td>
@@ -87,58 +102,7 @@ export default async function SubscriptionsPage() {
         </table>
       </div>
 
-      <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6 max-w-2xl">
-        <h3 className="text-sm font-bold text-navy mb-4">Add subscription</h3>
-        <form action={createSubscription} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <label className="block text-xs text-muted mb-1.5">Name</label>
-            <input name="name" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="Netflix" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Category</label>
-            <input name="category" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="Entertainment" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Amount (₹)</label>
-            <input name="expected_amount" type="number" step="0.01" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Frequency</label>
-            <select name="frequency" className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-              <option value="annual">Annual</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Renewal date</label>
-            <input name="due_date" type="date" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Personal / Office</label>
-            <select name="personal_or_office" className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-              <option value="personal">Personal</option>
-              <option value="office">Office</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Linked account/card</label>
-            <select name="linked_account_id" className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-              <option value="">-</option>
-              {(accounts || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 mt-6">
-            <input type="checkbox" name="auto_renew" id="auto_renew" className="w-4 h-4" />
-            <label htmlFor="auto_renew" className="text-xs text-muted">Auto-renews</label>
-          </div>
-          <div className="col-span-2">
-            <button type="submit" className="bg-navy text-white font-semibold rounded-xl py-2.5 text-sm w-full">
-              + Add subscription
-            </button>
-          </div>
-        </form>
-      </div>
+      <AddSubscriptionForm accounts={accounts || []} />
     </div>
   );
 }

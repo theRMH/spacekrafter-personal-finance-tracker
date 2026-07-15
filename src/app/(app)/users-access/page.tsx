@@ -1,12 +1,14 @@
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function UsersAccessPage() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: profile } = user
-    ? await supabase.from("profiles").select("full_name, role, created_at").eq("id", user.id).single()
+  // Middleware already verified this user and forwards the id/email — skip a second
+  // round trip to Supabase Auth just to re-derive it on every page load.
+  const userId = headers().get("x-user-id");
+  const userEmail = headers().get("x-user-email");
+  const { data: profile } = userId
+    ? await supabase.from("profiles").select("full_name, role, created_at").eq("id", userId).single()
     : { data: null };
 
   return (
@@ -27,7 +29,7 @@ export default async function UsersAccessPage() {
           <tbody>
             <tr className="border-t border-[#edf0ee]">
               <td className="p-3 font-semibold">{profile?.full_name ?? "Owner"}</td>
-              <td className="p-3">{user?.email}</td>
+              <td className="p-3">{userEmail}</td>
               <td className="p-3 capitalize">{profile?.role ?? "owner"}</td>
               <td className="p-3">
                 <span className="rounded-full bg-[#e5f4eb] text-success px-2 py-1 font-bold text-[10px]">Active</span>

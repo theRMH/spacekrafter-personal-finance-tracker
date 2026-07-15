@@ -66,3 +66,25 @@ export async function cancelSubscription(formData: FormData) {
   revalidatePath("/subscriptions");
   revalidatePath("/calendar");
 }
+
+export async function restartSubscription(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const id = String(formData.get("id"));
+  const restartDate = String(formData.get("restart_date") || "");
+  if (!restartDate) throw new Error("Restart date is required");
+
+  const { error } = await supabase
+    .from("commitments")
+    .update({ status: "upcoming", due_date: restartDate })
+    .eq("id", id)
+    .eq("owner_id", user.id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/subscriptions");
+  revalidatePath("/calendar");
+}
