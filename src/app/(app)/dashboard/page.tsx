@@ -2,9 +2,17 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getAccountMovements } from "@/lib/balances";
 import { formatInr, formatDate } from "@/lib/format";
+import TrendChart from "./trend-chart";
 
 function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function formatDateRange(start: Date, end: Date) {
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const startLabel = start.toLocaleDateString("en-IN", { day: "numeric", month: sameMonth ? undefined : "short" });
+  const endLabel = end.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return `${startLabel}–${endLabel}`;
 }
 
 const DONUT_COLORS = ["#181E32", "#3A71AA", "#56A688", "#CDC1B4", "#767678", "#6C6456"];
@@ -68,7 +76,8 @@ export default async function DashboardPage() {
   }
 
   const allTx = rangeTx || [];
-  const monthStart = startOfMonth(new Date());
+  const today = new Date();
+  const monthStart = startOfMonth(today);
   const thisMonthTx = allTx.filter((t) => new Date(t.transaction_date) >= monthStart);
 
   const income = thisMonthTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
@@ -77,11 +86,16 @@ export default async function DashboardPage() {
   const personalExpense = thisMonthTx.filter((t) => t.type === "expense" && t.personal_or_office === "personal").reduce((s, t) => s + Number(t.amount), 0);
   const officeExpense = thisMonthTx.filter((t) => t.type === "expense" && t.personal_or_office === "office").reduce((s, t) => s + Number(t.amount), 0);
 
+  // Explicit date range everywhere a card/section is period-scoped, so it's never
+  // ambiguous whether a number is lifetime, this month, or something else.
+  const periodLabel = formatDateRange(monthStart, today);
+  const todayLabel = today.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
   const cards = [
-    { label: "Total available balance", value: formatInr(totalBalance), sub: `Across ${activeAccountIds.size} active account(s)`, href: "/accounts" },
-    { label: "Income this month", value: formatInr(income), sub: "Confirmed transactions", href: "/transactions" },
-    { label: "Expense this month", value: formatInr(expense), sub: expense > 0 ? `Personal ${Math.round((personalExpense / expense) * 100)}% | Office ${Math.round((officeExpense / expense) * 100)}%` : "No expenses yet", href: "/transactions" },
-    { label: "Net cash flow", value: formatInr(netCashFlow), sub: netCashFlow >= 0 ? "Positive this month" : "Negative this month", href: "/reports" },
+    { label: "Total available balance", value: formatInr(totalBalance), sub: `As of ${todayLabel} · ${activeAccountIds.size} active account(s)`, href: "/accounts" },
+    { label: "Income this month", value: formatInr(income), sub: periodLabel, href: "/transactions" },
+    { label: "Expense this month", value: formatInr(expense), sub: expense > 0 ? `${periodLabel} · Personal ${Math.round((personalExpense / expense) * 100)}% | Office ${Math.round((officeExpense / expense) * 100)}%` : `${periodLabel} · No expenses yet`, href: "/transactions" },
+    { label: "Net cash flow", value: formatInr(netCashFlow), sub: `${periodLabel} · ${netCashFlow >= 0 ? "Positive" : "Negative"}`, href: "/reports" },
   ];
 
   // 6-month trend
@@ -104,12 +118,6 @@ export default async function DashboardPage() {
       expense: monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
     };
   });
-  const maxTrend = Math.max(1, ...trend.map((t) => Math.max(t.income, t.expense)));
-  const chartW = 640, chartH = 200, padL = 10, padR = 10;
-  const stepX = (chartW - padL - padR) / (trend.length - 1 || 1);
-  const toY = (v: number) => chartH - 20 - (v / maxTrend) * (chartH - 40);
-  const incomePoints = trend.map((t, i) => `${padL + i * stepX},${toY(t.income)}`).join(" ");
-  const expensePoints = trend.map((t, i) => `${padL + i * stepX},${toY(t.expense)}`).join(" ");
 
   // Spend split donut (this month, by category)
   const expenseTx = thisMonthTx.filter((t) => t.type === "expense");
@@ -140,7 +148,7 @@ export default async function DashboardPage() {
 
   const attention = [
     { label: "Uncategorised / needs review", sub: "Imported rows", count: needsReviewCount || 0, style: "warn", href: "/transactions?status=needs_review" },
-    { label: "Provisional", sub: "Pending statement match", count: provisionalCount || 0, style: "info", href: "/transactions?status=provisional" },
+    { label: "Unverified", sub: "Pending statement match", count: provisionalCount || 0, style: "info", href: "/transactions?status=provisional" },
     { label: "Approvals", sub: "Payment requests", count: pendingApprovals || 0, style: "danger", href: "/approvals" },
   ];
   const pillStyle: Record<string, string> = {
@@ -177,29 +185,23 @@ export default async function DashboardPage() {
           <div className="flex justify-between items-center mb-3">
             <div>
               <h3 className="text-sm font-bold text-navy">Income and expense trend</h3>
-              <span className="text-[11px] text-muted">Last 6 months</span>
+              <span className="text-[11px] text-muted block">
+                {sixMonthsAgo.toLocaleDateString("en-IN", { month: "short", year: "numeric" })} – {today.toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+              </span>
+              <span className="text-[10px] text-muted/70 block">Tap or hover a point for details</span>
             </div>
             <div className="flex gap-3 text-[10px] text-muted">
               <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-full bg-navy inline-block" />Income</span>
               <span className="flex items-center gap-1"><i className="w-2 h-2 rounded-full bg-success inline-block" />Expense</span>
             </div>
           </div>
-          <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-[200px]">
-            {[0.25, 0.5, 0.75, 1].map((f) => (
-              <line key={f} x1={padL} y1={chartH - 20 - f * (chartH - 40)} x2={chartW - padR} y2={chartH - 20 - f * (chartH - 40)} stroke="#edf0ee" />
-            ))}
-            <polyline fill="none" stroke="#181E32" strokeWidth="3" points={incomePoints} />
-            <polyline fill="none" stroke="#56A688" strokeWidth="3" points={expensePoints} />
-            {trend.map((t, i) => (
-              <text key={t.label} x={padL + i * stepX} y={chartH - 4} fontSize="10" fill="#767678" textAnchor="middle">{t.label}</text>
-            ))}
-          </svg>
+          <TrendChart trend={trend} />
         </div>
 
         <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-5">
           <div className="mb-3">
             <h3 className="text-sm font-bold text-navy">Spend split</h3>
-            <span className="text-[11px] text-muted">This month</span>
+            <span className="text-[11px] text-muted">{periodLabel}</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] items-center gap-3">
             <div className="relative w-[150px] h-[150px] rounded-full mx-auto" style={{ background: donutGradient }}>
@@ -217,7 +219,7 @@ export default async function DashboardPage() {
                   <b>{formatInr(amt)}</b>
                 </div>
               ))}
-              {spendRows.length === 0 && <p className="text-[11px] text-muted">No expenses yet this month.</p>}
+              {spendRows.length === 0 && <p className="text-[11px] text-muted">No expenses yet in this period.</p>}
             </div>
           </div>
         </div>
@@ -244,7 +246,7 @@ export default async function DashboardPage() {
         <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-5">
           <div className="flex justify-between items-center mb-2">
             <h3 className="text-sm font-bold text-navy">Top payees</h3>
-            <span className="text-[11px] text-muted">This month</span>
+            <span className="text-[11px] text-muted">{periodLabel}</span>
           </div>
           {topPayees.map(([payee, d]) => (
             <div key={payee} className="flex justify-between items-center py-2.5 border-b border-[#edf0ee] last:border-0">
@@ -255,7 +257,7 @@ export default async function DashboardPage() {
               <strong className="text-xs">{formatInr(d.amount)}</strong>
             </div>
           ))}
-          {topPayees.length === 0 && <p className="text-[11px] text-muted py-2">No payee data yet this month.</p>}
+          {topPayees.length === 0 && <p className="text-[11px] text-muted py-2">No payee data yet in this period.</p>}
         </div>
 
         <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-5">

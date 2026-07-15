@@ -27,7 +27,7 @@ export default async function ImportPage() {
       </div>
 
       <div className="notice bg-[#f0f3f8] border border-[#d9e0ec] rounded-2xl p-4 text-xs text-[#394a68] mb-8">
-        Statements are the preferred source of truth. Rows that match an existing provisional manual entry are
+        Statements are the preferred source of truth. Rows that match an existing unverified manual entry are
         merged into that entry rather than duplicated; rows matching a due Insurance/Utility/Subscription
         commitment mark it paid automatically; unmatched unknown rows land in Transactions → Needs review.
       </div>

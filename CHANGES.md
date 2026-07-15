@@ -4,6 +4,35 @@ Per-session changelog for this project. See `CLAUDE.md` for the logging format a
 
 ## 2026-07-14
 
+### Accounts: collapsible "Add account" card + "Other" account type
+**Commit:** Uncommitted
+- **Added:** `supabase/migrations/0008_account_type_other.sql` — extends the `accounts.type` check constraint to allow `'other'` alongside bank/credit_card/upi_wallet/cash/loan. ⚠ DEPLOY status: **already applied** to Supabase project `trwmwickjvkoexotymum` via `npm run migrate`.
+- **Added:** `src/app/(app)/accounts/add-account-form.tsx` — the "Add account" form is now a collapsible client component: minimized by default (a compact "+ Add account" bar), expands on click, and auto-collapses again after a successful submit. Replaces the always-open form that used to take a full card's worth of space regardless of whether you were adding an account.
+- **Changed:** `src/app/(app)/accounts/page.tsx` — inline form removed in favor of `<AddAccountForm />`; added "Other" to the account type badge lookup so existing accounts of that type display correctly.
+- **Design note:** the account `type` field isn't free text because it drives real logic (only `cash` accounts skip the Unverified/provisional status in Add Entry) — so rather than an arbitrary custom-type text field, "Other" is a 6th preset that behaves like any other non-cash account, and the form has a hint pointing owners to describe what it actually is in the free-text Account name field.
+- **Verified:** rebuilt clean; Playwright confirmed the form starts collapsed (0 form fields rendered), expands correctly, the Type dropdown lists all 6 options including "Other", an Other-type account was created successfully and appeared in the account list, and the form auto-collapsed after submit. Test account deleted afterward. Zero console errors.
+
+**⚠ Redeploy needed:** migration already applied directly to Supabase (not part of the Vercel build); the frontend change needs the normal `git push` → Vercel redeploy.
+
+### Transactions: full filter bar (Account/Usage/Type/Category/Payee) + date-range picker + "Unverified" rename
+**Commit:** Uncommitted
+- **Changed:** `src/app/(app)/transactions/page.tsx` — added a date-range picker (From/To), and Account, Usage (Personal/Office/Shared), Type (Income/Expense/Transfer/Investment), Category, and Payee/Payer (free-text search) filters, all combining with the existing status tabs. Status tabs now preserve every active filter when switching between them (extended `hrefForStatus()` beyond just date range).
+- **Renamed:** "Provisional" → "Unverified" everywhere it's user-facing (Transactions filter tab, per-row status badge via a new `STATUS_LABEL` map, Dashboard's attention card, Import page copy) — the internal DB status value stays `provisional`, only the display label changed, per user feedback that "provisional" reads as accounting jargon.
+- **Bug caught during verification:** the "Clear filters" link initially reused the same `hrefForStatus()` helper built for the status tabs (which *preserves* active filters) — so clicking it did nothing. Fixed to actually clear all filters while still sensibly preserving the active status tab if one was selected (e.g. `?status=confirmed` survives; date/account/usage/type/category/payee don't).
+- **Verified:** rebuilt clean; Playwright confirmed each filter narrows results correctly (Type=expense → 52/71 rows, +Usage=office → 17; Account=ICICI Office → 21 rows all from that account; Category=Groceries → 11 rows; Payee search "Zoho" → 6 exact matches), status-tab switching preserves all active filters, and the fixed Clear filters link resets to a clean URL (or `?status=X` if a tab was active). Zero console errors throughout.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+### Dashboard: interactive trend chart + unambiguous period labels
+**Commit:** Uncommitted
+- **Added:** `src/app/(app)/dashboard/trend-chart.tsx` — client component replacing the static inline SVG. Adds hover (desktop) and tap (mobile) interactivity: a wide invisible hit-target per month, highlighted dots + a guideline on the active point, and a floating tooltip showing the exact month/income/expense values. Same data, same visual style — purely additive.
+- **Fixed:** the chart's SVG had `touch-none` (CSS `touch-action: none`), which suppresses the browser's synthetic click-after-tap on real touch devices — this would have silently broken the whole feature on phones. Removed it and added an explicit `onTouchStart` handler as well.
+- **Changed:** `src/app/(app)/dashboard/page.tsx` — every period-scoped card/section subtitle now shows an explicit date range (e.g. "1–15 Jul 2026") instead of vague text like "Confirmed transactions" or "This month", per user feedback that it wasn't clear whether values were lifetime, weekly, or monthly. "Total available balance" is labeled "As of {today}" since a balance is a snapshot, not a period.
+- **Decision (discussed with user, not built this round):** a real interactive Today/Week/Month/Last Month/Custom period selector (PRD DASH-02) will go on the **Reports** page instead of Dashboard — a dashboard should stay a fast, fixed "right now" view; flexible filtering belongs on the Analysis/Reports side. Follow-up, not part of this change.
+- **Verified:** rebuilt clean; Playwright checks confirm tooltip values exactly match the KPI cards' totals (e.g. July tooltip = ₹1,25,320 income / ₹21,247 expense, identical to the Income/Expense cards), zero console errors, zero horizontal overflow on a 390px mobile viewport, and the interaction works via click (confirmed) — Playwright's synthetic `.tap()` doesn't generate a click by design (it's meant to test raw touch handlers in isolation), so it undercounts real mobile behavior; real phones fire click-after-tap once `touch-action: none` isn't blocking it, which was the actual fix.
+
+**⚠ Redeploy needed:** frontend-only, no migrations — push to `main` for Vercel to redeploy.
+
 ### Performance: colocate Vercel with Supabase's region + parallelize queries
 **Commit:** Uncommitted
 - **Added:** `vercel.json` — pins serverless functions to `hnd1` (Tokyo), matching the Supabase project's `ap-northeast-1` region. Diagnosis: with no region set, Vercel defaults to a US region, so every Supabase call on every page was making a full Pacific round-trip. This is the single biggest lever — it doesn't reduce in local dev testing (this machine isn't in either region), so its effect will only show once redeployed to Vercel.

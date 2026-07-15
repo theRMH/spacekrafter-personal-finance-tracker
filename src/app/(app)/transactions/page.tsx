@@ -16,36 +16,92 @@ const STATUS_PILL: Record<string, string> = {
   needs_review: "bg-[#fdeaea] text-[#b64b52]",
 };
 
+// "provisional" is the internal/DB status name; shown to Owners as "Unverified"
+// since that's clearer than accounting jargon.
+const STATUS_LABEL: Record<string, string> = {
+  confirmed: "Confirmed",
+  provisional: "Unverified",
+  needs_review: "Needs review",
+};
+
+const TYPE_OPTIONS = [
+  { value: "income", label: "Income" },
+  { value: "expense", label: "Expense" },
+  { value: "transfer", label: "Transfer" },
+  { value: "investment", label: "Investment" },
+];
+
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: { status?: string };
+  searchParams: {
+    status?: string;
+    from?: string;
+    to?: string;
+    account?: string;
+    usage?: string;
+    type?: string;
+    category?: string;
+    payee?: string;
+  };
 }) {
   const supabase = createClient();
   const statusFilter = searchParams?.status;
+  const fromDate = searchParams?.from;
+  const toDate = searchParams?.to;
+  const accountFilter = searchParams?.account;
+  const usageFilter = searchParams?.usage;
+  const typeFilter = searchParams?.type;
+  const categoryFilter = searchParams?.category;
+  const payeeFilter = searchParams?.payee;
 
   let query = supabase
     .from("transactions")
     .select(
-      "id, transaction_date, amount, type, personal_or_office, payee_payer, narration, status, source, accounts(name), categories(id, group_name), subcategories(id, name)"
+      "id, transaction_date, amount, type, personal_or_office, payee_payer, narration, status, source, account_id, accounts(name), categories(id, group_name), subcategories(id, name)"
     )
     .is("deleted_at", null)
     .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (statusFilter) query = query.eq("status", statusFilter);
+  if (fromDate) query = query.gte("transaction_date", fromDate);
+  if (toDate) query = query.lte("transaction_date", toDate);
+  if (accountFilter) query = query.eq("account_id", accountFilter);
+  if (usageFilter) query = query.eq("personal_or_office", usageFilter);
+  if (typeFilter) query = query.eq("type", typeFilter);
+  if (categoryFilter) query = query.eq("category_id", categoryFilter);
+  if (payeeFilter) query = query.ilike("payee_payer", `%${payeeFilter}%`);
 
-  const [{ data: transactions }, { data: categories }, { data: subcategories }] = await Promise.all([
+  const [{ data: transactions }, { data: categories }, { data: subcategories }, { data: accounts }] = await Promise.all([
     query,
     supabase.from("categories").select("id, group_name").order("group_name"),
     supabase.from("subcategories").select("id, name, category_id").order("name"),
+    supabase.from("accounts").select("id, name").order("name"),
   ]);
 
+  // Status tabs keep every other active filter when you switch between them.
+  function hrefForStatus(status?: string) {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
+    if (accountFilter) params.set("account", accountFilter);
+    if (usageFilter) params.set("usage", usageFilter);
+    if (typeFilter) params.set("type", typeFilter);
+    if (categoryFilter) params.set("category", categoryFilter);
+    if (payeeFilter) params.set("payee", payeeFilter);
+    const qs = params.toString();
+    return qs ? `/transactions?${qs}` : "/transactions";
+  }
+
+  const hasFilters = Boolean(fromDate || toDate || accountFilter || usageFilter || typeFilter || categoryFilter || payeeFilter);
+
   const filters = [
-    { label: "All", href: "/transactions" },
-    { label: "Confirmed", href: "/transactions?status=confirmed" },
-    { label: "Provisional", href: "/transactions?status=provisional" },
-    { label: "Needs review", href: "/transactions?status=needs_review" },
+    { label: "All", status: undefined },
+    { label: "Confirmed", status: "confirmed" },
+    { label: "Unverified", status: "provisional" },
+    { label: "Needs review", status: "needs_review" },
   ];
 
   return (
@@ -64,9 +120,9 @@ export default async function TransactionsPage({
         {filters.map((f) => (
           <Link
             key={f.label}
-            href={f.href}
+            href={hrefForStatus(f.status)}
             className={`rounded-full px-3 py-2 text-xs border ${
-              (statusFilter ?? "") === (f.href.split("status=")[1] ?? "")
+              (statusFilter ?? "") === (f.status ?? "")
                 ? "bg-navy text-white border-navy"
                 : "bg-white border-[#e3ddd7] text-navy"
             }`}
@@ -75,6 +131,66 @@ export default async function TransactionsPage({
           </Link>
         ))}
       </div>
+
+      <form method="get" className="flex flex-wrap items-end gap-2 mb-4 bg-white border border-[#e3ddd7] rounded-xl p-3">
+        {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
+        <div>
+          <label className="block text-[10px] text-muted mb-1">From</label>
+          <input type="date" name="from" defaultValue={fromDate} className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted mb-1">To</label>
+          <input type="date" name="to" defaultValue={toDate} className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted mb-1">Account</label>
+          <select name="account" defaultValue={accountFilter || ""} className="border border-[#e3ddd7] rounded-lg p-2 text-xs min-w-[130px]">
+            <option value="">All accounts</option>
+            {(accounts || []).map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted mb-1">Usage</label>
+          <select name="usage" defaultValue={usageFilter || ""} className="border border-[#e3ddd7] rounded-lg p-2 text-xs">
+            <option value="">All</option>
+            <option value="personal">Personal</option>
+            <option value="office">Office</option>
+            <option value="shared">Shared</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted mb-1">Type</label>
+          <select name="type" defaultValue={typeFilter || ""} className="border border-[#e3ddd7] rounded-lg p-2 text-xs">
+            <option value="">All types</option>
+            {TYPE_OPTIONS.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted mb-1">Category</label>
+          <select name="category" defaultValue={categoryFilter || ""} className="border border-[#e3ddd7] rounded-lg p-2 text-xs min-w-[150px]">
+            <option value="">All categories</option>
+            {(categories || []).map((c) => (
+              <option key={c.id} value={c.id}>{c.group_name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] text-muted mb-1">Payee / Payer</label>
+          <input type="text" name="payee" defaultValue={payeeFilter} placeholder="Search…" className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
+        </div>
+        <button type="submit" className="bg-navy text-white rounded-lg px-4 py-2 text-xs font-semibold">
+          Apply
+        </button>
+        {hasFilters && (
+          <Link href={statusFilter ? `/transactions?status=${statusFilter}` : "/transactions"} className="text-[11px] text-muted underline px-1">
+            Clear filters
+          </Link>
+        )}
+      </form>
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto">
         <table className="w-full text-xs min-w-[900px]">
@@ -102,8 +218,8 @@ export default async function TransactionsPage({
                 </td>
                 <td className="p-3 capitalize">{tx.personal_or_office}</td>
                 <td className="p-3">
-                  <span className={`inline-flex rounded-full px-2 py-1 font-bold capitalize ${STATUS_PILL[tx.status] ?? ""}`}>
-                    {tx.status.replace("_", " ")}
+                  <span className={`inline-flex rounded-full px-2 py-1 font-bold ${STATUS_PILL[tx.status] ?? ""}`}>
+                    {STATUS_LABEL[tx.status] ?? tx.status}
                   </span>
                   <div className="mt-1">
                     <span className={`inline-flex rounded-full px-2 py-1 font-bold capitalize ${TYPE_PILL[tx.type] ?? ""}`}>

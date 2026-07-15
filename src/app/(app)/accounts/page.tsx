@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAccount } from "./actions";
 import { getAccountMovements } from "@/lib/balances";
 import { formatInr } from "@/lib/format";
+import AddAccountForm from "./add-account-form";
 
 const ACCOUNT_TYPES = [
   { value: "bank", label: "Bank Account" },
@@ -9,6 +9,7 @@ const ACCOUNT_TYPES = [
   { value: "upi_wallet", label: "UPI / Wallet" },
   { value: "cash", label: "Cash" },
   { value: "loan", label: "Loan Account" },
+  { value: "other", label: "Other" },
 ];
 
 export default async function AccountsPage() {
@@ -59,47 +60,7 @@ export default async function AccountsPage() {
         )}
       </div>
 
-      <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6 max-w-xl">
-        <h3 className="text-sm font-bold text-navy mb-4">Add account</h3>
-        <form action={createAccount} className="grid gap-4">
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Account name</label>
-            <input name="name" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="HDFC Personal" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Type</label>
-              <select name="type" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-                {ACCOUNT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-muted mb-1.5">Personal / Office</label>
-              <select name="personal_or_office" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
-                <option value="personal">Personal</option>
-                <option value="office">Office</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-muted mb-1.5">Opening balance (₹)</label>
-            <input
-              name="opening_balance"
-              type="number"
-              step="0.01"
-              defaultValue={0}
-              className="w-full border border-[#e3ddd7] rounded-xl p-2.5"
-            />
-          </div>
-          <button type="submit" className="bg-navy text-white font-semibold rounded-xl py-2.5 text-sm">
-            + Add account
-          </button>
-        </form>
-      </div>
+      <AddAccountForm />
     </div>
   );
 }
