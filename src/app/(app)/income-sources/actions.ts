@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export async function createSubscription(formData: FormData) {
+export async function createIncomeSource(formData: FormData) {
   const supabase = createClient();
   const {
     data: { user },
@@ -11,26 +11,27 @@ export async function createSubscription(formData: FormData) {
   if (!user) throw new Error("Not authenticated");
 
   const name = String(formData.get("name") || "").trim();
-  const category = String(formData.get("category") || "").trim() || null;
-  const amount = Number(formData.get("expected_amount") || 0) || null;
+  const incomeType = String(formData.get("income_type") || "").trim();
+  const payerOrProperty = String(formData.get("payer_or_property") || "").trim() || null;
+  const notes = String(formData.get("notes") || "").trim() || null;
+  const expectedAmount = Number(formData.get("expected_amount") || 0) || null;
   const frequency = String(formData.get("frequency") || "monthly");
   const dueDate = String(formData.get("due_date") || "");
-  const autoRenew = formData.get("auto_renew") === "on";
   const linkedAccountId = String(formData.get("linked_account_id") || "") || null;
   const personalOrOffice = String(formData.get("personal_or_office") || "personal");
 
-  if (!name || !dueDate) {
-    throw new Error("Name and renewal date are required");
+  if (!name || !incomeType || !dueDate) {
+    throw new Error("Source name, income type and next expected date are required");
   }
 
   const { data: commitment, error } = await supabase
     .from("commitments")
     .insert({
       owner_id: user.id,
-      commitment_type: "subscription",
+      commitment_type: "expected_income",
       name,
       personal_or_office: personalOrOffice,
-      expected_amount: amount,
+      expected_amount: expectedAmount,
       frequency,
       due_date: dueDate,
       linked_account_id: linkedAccountId,
@@ -41,18 +42,19 @@ export async function createSubscription(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
-  const { error: detailErr } = await supabase.from("subscription_details").insert({
+  const { error: detailErr } = await supabase.from("income_source_details").insert({
     commitment_id: commitment.id,
-    category,
-    auto_renew: autoRenew,
+    income_type: incomeType,
+    payer_or_property: payerOrProperty,
+    notes,
   });
   if (detailErr) throw new Error(detailErr.message);
 
-  revalidatePath("/subscriptions");
+  revalidatePath("/income-sources");
   revalidatePath("/calendar");
 }
 
-export async function updateSubscription(formData: FormData) {
+export async function updateIncomeSource(formData: FormData) {
   const supabase = createClient();
   const {
     data: { user },
@@ -61,16 +63,17 @@ export async function updateSubscription(formData: FormData) {
 
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
-  const category = String(formData.get("category") || "").trim() || null;
-  const amount = Number(formData.get("expected_amount") || 0) || null;
+  const incomeType = String(formData.get("income_type") || "").trim();
+  const payerOrProperty = String(formData.get("payer_or_property") || "").trim() || null;
+  const notes = String(formData.get("notes") || "").trim() || null;
+  const expectedAmount = Number(formData.get("expected_amount") || 0) || null;
   const frequency = String(formData.get("frequency") || "monthly");
   const dueDate = String(formData.get("due_date") || "");
-  const autoRenew = formData.get("auto_renew") === "on";
   const linkedAccountId = String(formData.get("linked_account_id") || "") || null;
   const personalOrOffice = String(formData.get("personal_or_office") || "personal");
 
-  if (!id || !name || !dueDate) {
-    throw new Error("Name and renewal date are required");
+  if (!id || !name || !incomeType || !dueDate) {
+    throw new Error("Source name, income type and next expected date are required");
   }
 
   const { error } = await supabase
@@ -78,7 +81,7 @@ export async function updateSubscription(formData: FormData) {
     .update({
       name,
       personal_or_office: personalOrOffice,
-      expected_amount: amount,
+      expected_amount: expectedAmount,
       frequency,
       due_date: dueDate,
       linked_account_id: linkedAccountId,
@@ -88,16 +91,17 @@ export async function updateSubscription(formData: FormData) {
   if (error) throw new Error(error.message);
 
   const { error: detailErr } = await supabase
-    .from("subscription_details")
-    .update({ category, auto_renew: autoRenew })
+    .from("income_source_details")
+    .update({ income_type: incomeType, payer_or_property: payerOrProperty, notes })
     .eq("commitment_id", id);
   if (detailErr) throw new Error(detailErr.message);
 
-  revalidatePath("/subscriptions");
+  revalidatePath("/income-sources");
   revalidatePath("/calendar");
+  revalidatePath("/plans");
 }
 
-export async function cancelSubscription(formData: FormData) {
+export async function markIncomeReceived(formData: FormData) {
   const supabase = createClient();
   const {
     data: { user },
@@ -105,31 +109,13 @@ export async function cancelSubscription(formData: FormData) {
   if (!user) throw new Error("Not authenticated");
 
   const id = String(formData.get("id"));
-  const { error } = await supabase.from("commitments").update({ status: "cancelled" }).eq("id", id).eq("owner_id", user.id);
-  if (error) throw new Error(error.message);
-
-  revalidatePath("/subscriptions");
-  revalidatePath("/calendar");
-}
-
-export async function restartSubscription(formData: FormData) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-
-  const id = String(formData.get("id"));
-  const restartDate = String(formData.get("restart_date") || "");
-  if (!restartDate) throw new Error("Restart date is required");
-
   const { error } = await supabase
     .from("commitments")
-    .update({ status: "upcoming", due_date: restartDate })
+    .update({ status: "paid" })
     .eq("id", id)
     .eq("owner_id", user.id);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/subscriptions");
+  revalidatePath("/income-sources");
   revalidatePath("/calendar");
 }

@@ -2,6 +2,125 @@
 
 Per-session changelog for this project. See `CLAUDE.md` for the logging format and the `⚠ DEPLOY` rule.
 
+## 2026-07-22 (continued, edit action for Insurance/Utilities/Subscriptions)
+
+### Added the same Edit action to Insurance, Utilities, and Subscriptions
+**Commit:** Uncommitted
+- **Context:** Follow-up to the Income Sources edit fix — confirmed the same missing-edit gap existed on all three sibling commitment-type pages (create + mark-paid only, no way to update details afterward).
+- **Added:** `updateInsurancePolicy` (`insurance/actions.ts`) + `policy-row.tsx`, `updateUtilityConnection` (`utilities/actions.ts`) + `connection-row.tsx`, `updateSubscription` (`subscriptions/actions.ts`) + `subscription-row.tsx` — each mirrors the Income Sources pattern: an "Edit" link expands an inline form pre-filled with current values, Save/Cancel. Subscriptions' row keeps its existing Cancel/Restart logic alongside the new Edit button, unchanged.
+- **Changed:** all three `page.tsx` files now delegate row rendering to their new client row component instead of a static server-rendered `<tr>`.
+- **Verified:** rebuilt clean; Playwright edited a real record on each page (LIC Life Cover premium, Home Electricity amount, Netflix amount), confirmed each change persisted directly in the database, then reverted all three back to their original demo values (non-destructive test, consistent with this session's cleanup discipline). Also confirmed Subscriptions' Cancel/Restart/Mark paid conditional logic still renders correctly alongside Edit. Zero real console errors (one benign dev-mode HMR fetch warning, same artifact seen earlier this session, unrelated to this change).
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-07-22 (continued, income source edit)
+
+### Income Sources: added a real Edit action
+**Commit:** Uncommitted
+- **Context:** User noticed the 5 real income sources (created with ₹0 placeholder amounts) had no way to actually enter real figures — only "Mark received" existed, no edit. Checked: Insurance/Utilities/Subscriptions have the exact same gap (create + mark-paid only, no edit anywhere) — this was a systemic gap in the pattern I copied, not unique to Income Sources.
+- **Added:** `updateIncomeSource` action (`income-sources/actions.ts`) and `income-source-row.tsx` — each row now has an "Edit" link that expands an inline form (same fields as Add) pre-filled with current values; Save/Cancel. `page.tsx` now delegates row rendering to this client component instead of a static server-rendered `<tr>`.
+- **Verified:** rebuilt clean; Playwright confirmed the Edit form opens pre-filled and Save persists — confirmed directly in the database (`expected_amount` updated from 0 to 25000 on Kodambakkam Flat Rent, which is now real data, not a test value to clean up).
+- **Not done yet:** the same missing-edit gap on Insurance/Utilities/Subscriptions — flagged to the user, not yet actioned.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-07-22 (continued, pinned nav items)
+
+### Sidebar: pin any nav item to the top
+**Commit:** Uncommitted
+- **Context:** Follow-up to collapsible groups. User wanted lightweight menu customization — explicitly not Quick Access (automatic "most used" tracking, still deferred) — just letting them manually pin specific items so they're always visible without opening a collapsed group.
+- **Changed:** `src/app/(app)/app-shell.tsx` — a pin toggle (📌) next to every nav item; pinned items appear in a new "Pinned" section above the collapsible groups (same `localStorage`-backed pattern as the collapsed-group state, key `navPinnedPaths`). Pinning is a shortcut, not a move — the item still also appears in its normal group. The Pinned section only renders when something is actually pinned.
+- **Verified:** rebuilt clean; Playwright confirmed no Pinned section when nothing's pinned, pinning shows the item in both places, the pin survives a reload, unpinning removes the section once empty, and group collapsing still works unaffected. Zero console errors.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-07-22 (continued)
+
+### Category list: added the one real gap found during an Excel re-audit
+**Commit:** Uncommitted
+- **Context:** User asked for a full re-check that the app matches the Excel gap analysis. Re-verified directly against the live database rather than from memory — found one genuine miss: Excel had "Meat Expenses" as its own line item, but it wasn't split out from general Groceries when the other food-related items were (Fresh Produce & Dairy was, Meat wasn't — inconsistent, not intentional).
+- **Added:** "Meat / Non-Veg" subcategory under "Home - Groceries and Food" — `scripts/seed-owner.mjs` (future owners) and `scripts/expand-categories.mjs` (applied to the live owner via `npm run expand:categories`). ⚠ DEPLOY status: **already applied** to Supabase project `trwmwickjvkoexotymum`.
+- **Confirmed, not changed:** the deliberately-generalized categories (no per-person names like "Banu Expenses" or "LIC Premium - Seetharaman") already have a working self-service path — Settings → Categories already has full create/delete CRUD (built in the earlier categorisation round) — so the Owner can add his own specific categories himself without needing code changes.
+- **Added:** `scripts/add-excel-income-sources.mjs` — created the 5 real recurring income sources from the client's Excel that don't already have a category-level home: Kodambakkam Flat Rent, Bangalore Flat Rent, Lavanya's two payout streams, KitchenAid AMC. (Excel's other income lines — business sales, salary, freelance — are already covered as regular income categories.) Amounts left at ₹0 (the Excel had them scrubbed too — no figures invented), due date defaulted to the 1st of next month as a placeholder. Nirmal edits both from the Income Sources page whenever he has real numbers; he can also add more sources himself there anytime.
+
+## 2026-07-22
+
+### Sidebar: collapsible nav groups
+**Commit:** Uncommitted
+- **Context:** Sidebar had grown to 16 nav items across 3 groups (Overview/Personal Finance/Control) as features were added this session; user said it looked "stuffed." Asked for two things (a Quick Access "most used" section, and collapsible groups) — chose to defer Quick Access (needs its own tracking-mechanism decision, discussed but not resolved) and do collapsible groups now.
+- **Changed:** `src/app/(app)/app-shell.tsx` — each of the 3 group headers is now a clickable toggle with a chevron; collapsing a group hides its items (other groups unaffected). State persists per-browser via `localStorage` (`navCollapsedGroups`) so it's remembered across sessions without a backend change — this is a personal UI preference, not financial data, same category as which forms are expanded. Defaults to all-expanded (nothing changes until a user actively collapses something). Works unchanged for the Accountant's already-filtered nav.
+- **Verified:** rebuilt clean; Playwright confirmed collapsing one group hides only that group's items, other groups stay visible, the collapsed state survives a page reload, and expanding again restores the items. Zero console errors.
+- **Deferred:** Quick Access ("most used at top") and any menu customization (reorder/hide/add shortcuts) — discussed, both need their own design decisions (tracking mechanism: browser-local vs. synced to account) and were explicitly deferred to design together later rather than half-building either now.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-07-21 (continued)
+
+### Accountant role v1 — invite flow, RLS-enforced scoping, role-aware nav and middleware
+**Commit:** Uncommitted
+- **Context:** Long-disabled "Invite Accountant" button on Users & Access. The PRD/IA docs (project root) already spec this in full detail (tab/action/account/data permission layers, invite flow, approval-gated deletion, multiple accountants, session revocation). Scoped down to a v1 slice, confirmed with the user: invite with owner-set temp password (no email/SMTP), fixed default tab set (no owner-customizable per-accountant scope yet), View/Add/Import only (no edit/delete), enforced at the RLS layer — not just a hidden nav menu, per the PRD's explicit "server-side enforcement" requirement.
+- **Added:** `supabase/migrations/0011_accountant_role.sql` — `profiles.managed_owner_id` (which Owner an Accountant works for) + purely additive RLS policies granting an Accountant SELECT on accounts/categories/subcategories/category_rules, SELECT+INSERT on transactions/import_batches/audit_log, INSERT+UPDATE on import_batches (needed so the Owner sees correct summary counts for imports an Accountant runs), and full access on import_mappings (their own saved column-mapping preference). None of the existing Owner-only policies were touched. ⚠ DEPLOY status: **already applied** to Supabase project `trwmwickjvkoexotymum` via `npm run migrate`.
+- **Verified the RLS boundary directly** (via a real signed-in test accountant, before writing any UI): can SELECT accounts/categories, can INSERT a transaction, **cannot** UPDATE or DELETE it, and sees **zero rows** from investments/plans/commitments — confirmed as actual query results, not just intent.
+- **Added:** `src/lib/supabase/admin.ts` — service-role client, used only server-side for user creation.
+- **Added:** `src/lib/auth.ts` — `getEffectiveOwnerId()`. Every write path in the app previously hardcoded `owner_id: user.id` (the currently authenticated user) — fine for a single-owner app, but would have made an Accountant's own inserts owned by *their* uid instead of the Owner's. Wired into `add-entry/actions.ts` (`createTransaction`) and `import/actions.ts` (`processImport`, all 4 insert/upsert points) so records an Accountant creates still belong to the Owner's account; `audit_log.actor_id` still records the literal Accountant for accountability.
+- **Added:** `src/app/(app)/users-access/actions.ts` (`inviteAccountant`) + rewrote `page.tsx` — real user directory (Owner + their accountants, with email resolved via the admin client) and a working "+ Invite Accountant" form (name/email/temp password), replacing the disabled button. Blocks non-owners from inviting.
+- **Changed:** `src/lib/nav.ts` — `ACCOUNTANT_ALLOWED_PATHS`/`navForRole()` as the single source of truth for both nav filtering and route gating (Accounts, Import Statements, Add Entry, Transactions, Profile — Transactions added beyond the PRD's literal default list since Add Entry redirects there after saving, and it's a natural read-only view of data the Accountant can already SELECT). `src/app/(app)/layout.tsx`/`app-shell.tsx` thread role through; sidebar footer now shows "accountant access" / "owner access" instead of a hardcoded label.
+- **Changed:** `src/middleware.ts` — fetches the caller's role and redirects an Accountant away from any path outside their allowed set (403 for `/api/*`, redirect to `/accounts` otherwise), including on direct URL visits — the PRD is explicit that hidden menus alone aren't sufficient. Login redirect target is now role-aware (Accountant → `/accounts`, Owner → `/dashboard`). Note: this adds one more Supabase round trip per navigation (role lookup) — a real, deliberate latency cost for genuine access control, not the kind of redundant call removed earlier this session.
+- **Verified end-to-end** with a real invited accountant, signed in for real: appears in the Owner's user directory; lands on `/accounts` not `/dashboard`; nav shows exactly Accounts/Add Entry/Import Statements/Transactions and hides Dashboard/Investments/Reports/Settings/Users & Access; direct URL visits to blocked routes redirect away; successfully added a transaction via Add Entry; **that transaction's `owner_id` correctly matches the real Owner, not the accountant** (confirmed directly in the database). Zero console errors. Test accountant and test transaction cleaned up afterward.
+
+**Deferred to a later round (per agreed v1 scope):** Owner customizing which additional tabs/accounts a specific Accountant can see, forced password change on first login, session revocation UI, approval-gated deletion workflow, support for differently-scoped multiple accountants.
+
+**⚠ Redeploy needed:** migration already applied directly to Supabase (not part of the Vercel build); the frontend/middleware changes need the normal `git push` → Vercel redeploy.
+
+## 2026-07-21
+
+### Plans and Projections: per-category and per-income-source Projected vs Actual vs Variance
+**Commit:** Uncommitted
+- **Context:** Third and last of the Excel gap-analysis findings. The Excel's core mechanic — Projected/Actual/Variance/Variance% per individual line item per month — was only implemented at 5 coarse monthly buckets on the existing Plans page. Confirmed with the user: category-level granularity (not subcategory, too tedious to fill monthly), the existing 5-bucket summary stays as-is, income sources get their own row too.
+- **Added:** `supabase/migrations/0010_plan_categories.sql` — adds `category_id` to `plans`, relaxes `plan_type` to nullable so category rows (`plan_type = null`, `category_id` set) coexist with the 5 legacy bucket rows without touching the original unique constraint or `savePlans`'s existing upsert. A separate partial unique index (`category_id is not null`) enforces one row per category per month. ⚠ DEPLOY status: **already applied** to Supabase project `trwmwickjvkoexotymum` via `npm run migrate`.
+- **Added:** `src/app/(app)/plans/actions.ts` — `saveCategoryPlans`, a manual check-then-insert/update per category (not a DB upsert, since matching a partial unique index via Supabase's `onConflict` isn't reliable).
+- **Changed:** `src/app/(app)/plans/page.tsx` — below the unchanged 5-bucket summary, added a **Category breakdown** table (all ~30 categories, editable Projected input per row, Actual grouped from confirmed transactions by `category_id`, Variance/Variance%) and an **Income sources** table (one row per named income source, Projected from its `expected_amount`, Actual summed from confirmed transactions linked via `linked_commitment_id`). All categories/sources shown even at ₹0 — nothing hidden.
+- **Added:** Add Entry can now link an income transaction to a named income source — `add-entry/page.tsx` fetches `expected_income` commitments, `entry-form.tsx` shows an optional "Income source" dropdown when Type = Income, `actions.ts` stores it on `transactions.linked_commitment_id` (column already existed, just wasn't set from this path before). Without this, income-source Actuals would only ever populate via bank-statement Import, not how income is typically logged day-to-day.
+- **Verified:** rebuilt clean; migration applied without touching existing bucket rows; Playwright confirmed the 5-bucket summary is unchanged, the category table renders and a saved projection persists correctly (confirmed directly in the database — `plan_type: null`, `category_id` set, `projected_amount` correct), and an income source's Actual correctly reflects a manually-entered transaction linked to it via the new Add Entry dropdown once confirmed. Zero console errors. All test data (income source, transaction, category plan row) cleaned up afterward.
+
+**⚠ Redeploy needed:** migration already applied directly to Supabase (not part of the Vercel build); the frontend changes need the normal `git push` → Vercel redeploy.
+
+## 2026-07-20 (continued, real bank statement test)
+
+### Import: verified end-to-end against a real bank statement
+**Commit:** N/A — no code changed, verification only
+- **Context:** Pending backlog item "actual run-through with bank statement." User provided a real statement (`test file for nirmal app.xlsx`, 202 real transaction rows with the amount columns deliberately stripped for privacy). Filled in synthetic debit/credit amounts (summed to match the statement's own real footer totals for internal consistency) and ran it through Import against the HDFC Personal account.
+- **Result:** 202 rows accepted, 0 rejected, 0 duplicates, 0 transfers, 0 commitment matches, 15 auto-confirmed via existing category rules/payee history (e.g. every SWIGGY narration correctly categorized to Home - Groceries and Food, salary credits correctly identified as income), 187 correctly routed to Needs review as genuinely novel payees. Zero console errors. Import took over a minute for 202 rows — consistent with the per-request Supabase latency characteristic found earlier this session, not a bug.
+- **Cleanup:** all 202 test transactions, the import_batches row, and the audit_log entry were deleted afterward since the amounts were synthetic. The real statement file and a derived CSV both contained real third-party personal data (names, UPI handles) — the generated CSV and helper scripts were deleted; the original uploaded file was left for the user to decide on.
+- **Verdict:** Import feature works correctly against real-world messy bank narrations, not just the clean seed/dummy data used previously.
+
+## 2026-07-20 (continued)
+
+### Named income sources — new "Income Sources" page
+**Commit:** Uncommitted
+- **Context:** Second slice of the Excel gap analysis. The `commitments` table already allowed `commitment_type = 'expected_income'` but nothing ever created one — dead schema placeholder. Built out the same way Insurance/Utilities/Subscriptions already work: shared `commitments` row + a 1:1 detail extension table.
+- **Added:** `supabase/migrations/0009_income_sources.sql` — `income_source_details` table (`income_type`, `payer_or_property`, `notes`), RLS scoped to the owner via the parent commitment, same pattern as `insurance_details`/`utility_details`/`subscription_details`. ⚠ DEPLOY status: **already applied** to Supabase project `trwmwickjvkoexotymum` via `npm run migrate`.
+- **Added:** `src/app/(app)/income-sources/page.tsx`, `add-income-source-form.tsx` (collapsible, same pattern as Insurance's), `actions.ts` (`createIncomeSource`, `markIncomeReceived`) — full CRUD-lite for named recurring income (e.g. "Kodambakkam Flat Rent", "Lavanya Portfolio Payout"), with an Income type dropdown (Rental / Salary / Business Revenue / Investment Payout / Service-AMC Revenue / Other), expected amount, frequency, next expected date, linked account, and free-text payer/property + notes.
+- **Added:** `src/lib/nav.ts` — new "Income Sources" entry in the Personal Finance group, before Insurance.
+- **Changed:** the `paid` commitment status displays as **"Received"** on this page specifically (not "Paid") — same display-only relabeling pattern used earlier for provisional → "Unverified" on Transactions; underlying DB value unchanged so Calendar/Reports/Dashboard read paths (which already handle `expected_income` generically) need no changes.
+- **Verified:** rebuilt clean; Playwright confirmed the nav entry, empty state, collapsible form open/collapse-after-submit, a created income source appears and its status correctly reads "Received" (confirmed via row HTML) after Mark received, and Reports' Commitments tab (which already grouped by `commitment_type` generically) picks up the new type with zero code changes needed there. Zero console errors. Test record cleaned up from the database afterward.
+
+**⚠ Redeploy needed:** migration already applied directly to Supabase (not part of the Vercel build); the frontend/nav changes need the normal `git push` → Vercel redeploy.
+
+## 2026-07-20
+
+### Richer category list, Settings subcategory delete, and a category-default-usage bug fix
+**Commit:** Uncommitted
+- **Context:** Client's real cash-flow Excel (`NirmalKumar_CashFlow_Jun26_Mar27.xlsx`, pasted into project root) was reviewed in full to find gaps vs. the app. Three sized gaps were found (richer categories, named income sources, per-line-item projected/actual variance); this round covers only the smallest — the other two are deferred (see notes below).
+- **Changed:** `scripts/seed-owner.mjs` (`CATEGORY_SEED`) — added ~12 new subcategories across existing groups plus one new group ("Home - Religious and Family"), generalized (not the client's literal Excel names, per discussion): Fresh Produce and Dairy, Drinking Water, Driver Salary, Tuition / Coaching Fees, Supplements / Protein, Pet Care, Movies and Outings, Laundry Expenses, Religious / Temple Expenses, Family Functions and Events, Property Purchase - Legal and Documentation, Investment Returns / Payouts. Nothing existing removed or renamed. Applies to any future new owner from day one.
+- **Added:** `scripts/expand-categories.mjs` — idempotent script (upsert on the same unique keys as the seed script) to apply the same additions to the already-provisioned live owner, since `seed-owner.mjs` can't be safely re-run (it also creates the auth user). Added as `npm run expand:categories`. Ran against the live Supabase project — confirmed via direct query afterward: 20 categories (was 19), 103 subcategories (was ~78 + 25 across two rounds of additions/corrections), zero duplicates on a second run.
+- **Fixed:** `categories.default_personal_or_office` was settable in Settings but never actually applied anywhere — `add-entry/page.tsx` didn't even select that column. Now `add-entry/entry-form.tsx` auto-fills the Personal/Office/Shared field from the selected category's default, but only until the owner manually touches that field themselves (tracked via a `usageTouched` flag) — fully overridable, just removes a redundant click for the common case.
+- **Added:** `deleteSubcategory` action (`settings/actions.ts`) + a `×` control per subcategory row (`settings/page.tsx`) — subcategories could previously be created but never removed. Mirrors `deleteCategory`'s existing guard (blocked if any transaction references it via `subcategory_id`).
+- **Verified:** rebuilt clean; ran the expansion script twice against the live project to confirm idempotency (identical output, zero duplicate rows); Playwright confirmed the new group/subcategories render in Settings, deleting an unused subcategory works, Add Entry's usage field auto-fills from a category's default and preserves a manual override across further category changes. Zero console errors. (One test-script mistake during manual guard-testing briefly deleted the original "Groceries and Vegetables" subcategory since it happened to have no transactions referencing its `subcategory_id` specifically, even though its parent category is heavily used — restored immediately via direct upsert; final state confirmed correct.)
+- **Deferred (per decision, not started):** named recurring income sources, and per-line-item Projected vs Actual vs Variance (the Excel's central mechanic — app's `/plans` page only does this at 5 coarse buckets today). Full gap-analysis findings kept in memory (`excel_gap_analysis.md`) for when this is revisited.
+
+**⚠ Redeploy needed:** frontend change (Add Entry, Settings) needs the normal `git push` → Vercel redeploy. The category data changes are **already applied directly to the live Supabase project** via `npm run expand:categories` — not part of the Vercel build, no further action needed for that part.
+
 ## 2026-07-15
 
 ### Financial Calendar: clickable days + Reports/Insights date filtering and deeper insights

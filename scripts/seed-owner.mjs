@@ -3,16 +3,17 @@ import ws from "ws";
 
 // Initial master categories — PRD v1.1 Appendix A.
 const CATEGORY_SEED = [
-  { group: "Income - Salary and Personal", office: "personal", subs: ["Monthly Salary / Take-home Pay", "Bonus / Incentive Pay", "Freelance / Consulting Income", "Rental Income", "Dividend / Interest Income", "Other Personal Income"] },
+  { group: "Income - Salary and Personal", office: "personal", subs: ["Monthly Salary / Take-home Pay", "Bonus / Incentive Pay", "Freelance / Consulting Income", "Rental Income", "Dividend / Interest Income", "Investment Returns / Payouts", "Other Personal Income"] },
   { group: "Income - Business", office: "office", subs: ["Interior Contracting Projects Revenue", "BSH Home Appliances Sales", "KitchenAid Service Revenue", "Furniture and Chair Sales", "Modular Workstation Sales", "Sauna and Steam Room Revenue", "Project Advances / Deposits", "Other Business Income"] },
   { group: "Home - Housing", office: "personal", subs: ["Rent / Home Loan EMI", "Maintenance / Society Charges", "Property Tax", "Home Insurance Premium"] },
   { group: "Home - Utilities", office: "personal", subs: ["Electricity", "Water", "Gas / LPG", "Internet and Cable", "Mobile Phone Bills"] },
-  { group: "Home - Groceries and Food", office: "personal", subs: ["Groceries and Vegetables", "Dining Out / Restaurant", "Food Delivery"] },
-  { group: "Home - Transport", office: "personal", subs: ["Fuel / Petrol", "Car EMI / Insurance", "Vehicle Maintenance and Service", "Cab / Ola / Uber"] },
-  { group: "Home - Health and Personal Care", office: "personal", subs: ["Medical / Doctor Visits", "Medicines and Pharmacy", "Health Insurance Premium", "Gym / Fitness", "Salon / Grooming / Personal Care"] },
-  { group: "Home - Education and Children", office: "personal", subs: ["School / Tuition Fees", "Books / Stationery", "Online Courses / Subscriptions"] },
-  { group: "Home - Lifestyle and Entertainment", office: "personal", subs: ["OTT Subscriptions", "Shopping", "Electronics / Gadgets", "Travel / Holidays", "Gifts and Celebrations", "Domestic Help / Maid Salary"] },
+  { group: "Home - Groceries and Food", office: "personal", subs: ["Groceries and Vegetables", "Fresh Produce and Dairy (Fruits, Vegetables, Milk)", "Drinking Water", "Meat / Non-Veg", "Dining Out / Restaurant", "Food Delivery"] },
+  { group: "Home - Transport", office: "personal", subs: ["Fuel / Petrol", "Car EMI / Insurance", "Vehicle Maintenance and Service", "Cab / Ola / Uber", "Driver Salary"] },
+  { group: "Home - Health and Personal Care", office: "personal", subs: ["Medical / Doctor Visits", "Medicines and Pharmacy", "Health Insurance Premium", "Gym / Fitness", "Supplements / Protein", "Salon / Grooming / Personal Care", "Pet Care"] },
+  { group: "Home - Education and Children", office: "personal", subs: ["School / Tuition Fees", "Tuition / Coaching Fees", "Books / Stationery", "Online Courses / Subscriptions"] },
+  { group: "Home - Lifestyle and Entertainment", office: "personal", subs: ["OTT Subscriptions", "Shopping", "Electronics / Gadgets", "Travel / Holidays", "Gifts and Celebrations", "Movies and Outings", "Laundry Expenses", "Domestic Help / Maid Salary"] },
   { group: "Home - Loans and Miscellaneous", office: "personal", subs: ["Personal Loan EMI", "Credit Card Payments", "Charitable Donations", "Miscellaneous / Unexpected Expenses"] },
+  { group: "Home - Religious and Family", office: "personal", subs: ["Religious / Temple Expenses", "Family Functions and Events"] },
   { group: "Office - Overheads", office: "office", subs: ["Office Rent / Lease", "Electricity and Utilities", "Internet and Phone", "Maintenance and Housekeeping", "Office Supplies and Stationery"] },
   { group: "Office - Staff and Payroll", office: "office", subs: ["Staff Salaries", "Contract Labour / Site Workers", "PF / ESI / Statutory Compliance", "Freelancer / Consultant Fees"] },
   { group: "Office - Purchase / Inventory", office: "office", subs: ["BSH Appliances", "KitchenAid Products", "Furniture / Chairs Raw Material", "Modular Workstation Components", "Gym Equipment", "Sauna Materials / Units", "Interior Contracting Materials"] },
@@ -20,7 +21,7 @@ const CATEGORY_SEED = [
   { group: "Office - Sales, Marketing and Admin", office: "office", subs: ["Marketing and Advertising", "Website / Digital / SEO", "Business Travel", "Client Hospitality", "CA / Legal", "GST / Tax Payments", "Software / SaaS", "Bank Charges / OD Interest"] },
   { group: "Investments - Market", office: null, subs: ["Mutual Funds SIP", "Stocks / Equity", "NPS", "ELSS / Tax-Saving Funds"] },
   { group: "Investments - Fixed Income", office: null, subs: ["Fixed Deposit / RD", "PPF", "Savings Top-up", "Bonds / Debentures"] },
-  { group: "Investments - Real Estate and Business", office: null, subs: ["Real Estate EMI / Down Payment", "Business Capital / Working Capital", "Equipment / Asset Purchase"] },
+  { group: "Investments - Real Estate and Business", office: null, subs: ["Real Estate EMI / Down Payment", "Business Capital / Working Capital", "Equipment / Asset Purchase", "Property Purchase - Legal and Documentation"] },
   { group: "Investments - Insurance and Protection", office: null, subs: ["Life Insurance Premium", "Term Plan Premium", "ULIP / Endowment Plan"] },
 ];
 

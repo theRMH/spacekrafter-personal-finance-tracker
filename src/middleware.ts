@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { ACCOUNTANT_ALLOWED_PATHS, ACCOUNTANT_DEFAULT_PATH } from "@/lib/nav";
 
 const PUBLIC_PATHS = ["/login"];
 
@@ -29,15 +30,36 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicPath = PUBLIC_PATHS.includes(request.nextUrl.pathname);
+  const pathname = request.nextUrl.pathname;
+  const isPublicPath = PUBLIC_PATHS.includes(pathname);
 
   if (!user && !isPublicPath) {
     const redirectUrl = new URL("/login", request.url);
     return NextResponse.redirect(redirectUrl);
   }
 
+  // Accountant route gating — the PRD requires this enforced server-side, not
+  // just via a hidden nav menu, since a direct URL visit bypasses the UI
+  // entirely. RLS is the real data boundary; this stops them landing on a
+  // page that renders nothing useful (or errors) for their role.
+  let role: string | null = null;
+  if (user) {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    role = profile?.role ?? null;
+  }
+  const isAccountant = role === "accountant";
+  const isAllowedForAccountant = isPublicPath || ACCOUNTANT_ALLOWED_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+
+  if (user && isAccountant && !isAllowedForAccountant) {
+    if (pathname.startsWith("/api")) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+    const redirectUrl = new URL(ACCOUNTANT_DEFAULT_PATH, request.url);
+    return NextResponse.redirect(redirectUrl);
+  }
+
   if (user && isPublicPath) {
-    const redirectUrl = new URL("/dashboard", request.url);
+    const redirectUrl = new URL(isAccountant ? ACCOUNTANT_DEFAULT_PATH : "/dashboard", request.url);
     return NextResponse.redirect(redirectUrl);
   }
 

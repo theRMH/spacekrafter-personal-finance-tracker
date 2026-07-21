@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
-import { createCategory, deleteCategory, createSubcategory, createCategoryRule, deleteCategoryRule } from "./actions";
+import { createCategory, deleteCategory, createSubcategory, deleteSubcategory, createCategoryRule, deleteCategoryRule } from "./actions";
 
 export default async function SettingsPage() {
   const supabase = createClient();
@@ -45,9 +45,15 @@ export default async function SettingsPage() {
           <div>
             <div className="grid gap-1.5 mb-4 max-h-44 overflow-auto">
               {(subcategories || []).map((s: any) => (
-                <div key={s.id} className="text-[11px] text-muted flex justify-between border-b border-[#edf0ee] py-1">
+                <div key={s.id} className="text-[11px] text-muted flex justify-between items-center gap-2 border-b border-[#edf0ee] py-1">
                   <span>{s.name}</span>
-                  <span>{s.categories?.group_name}</span>
+                  <span className="flex items-center gap-2">
+                    <span>{s.categories?.group_name}</span>
+                    <form action={deleteSubcategory}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <button type="submit" className="text-[#b64b52] px-1">×</button>
+                    </form>
+                  </span>
                 </div>
               ))}
             </div>

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getEffectiveOwnerId } from "@/lib/auth";
 
 export type ImportMapping = {
   date: string;
@@ -45,9 +46,10 @@ export async function processImport(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
+  const ownerId = await getEffectiveOwnerId(supabase, user.id);
 
   await supabase.from("import_mappings").upsert(
-    { owner_id: user.id, account_id: accountId, label: "last_used", column_mapping: mapping },
+    { owner_id: ownerId, account_id: accountId, label: "last_used", column_mapping: mapping },
     { onConflict: "owner_id,account_id,label" }
   );
 
@@ -92,7 +94,7 @@ export async function processImport(
 
   const { data: batch, error: batchErr } = await supabase
     .from("import_batches")
-    .insert({ owner_id: user.id, account_id: accountId, file_name: fileName, column_mapping: mapping, total_rows: rows.length })
+    .insert({ owner_id: ownerId, account_id: accountId, file_name: fileName, column_mapping: mapping, total_rows: rows.length })
     .select()
     .single();
   if (batchErr) throw new Error(batchErr.message);
@@ -221,7 +223,7 @@ export async function processImport(
     const { data: inserted, error: insErr } = await supabase
       .from("transactions")
       .insert({
-        owner_id: user.id,
+        owner_id: ownerId,
         transaction_date: date,
         amount,
         type: finalType,
@@ -260,7 +262,7 @@ export async function processImport(
   await supabase.from("accounts").update({ last_imported_at: new Date().toISOString(), reconciliation_status: "in_progress" }).eq("id", accountId);
 
   await supabase.from("audit_log").insert({
-    owner_id: user.id,
+    owner_id: ownerId,
     actor_id: user.id,
     action: "import_statement",
     entity_table: "import_batches",

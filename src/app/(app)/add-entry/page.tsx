@@ -4,10 +4,11 @@ import EntryForm from "./entry-form";
 export default async function AddEntryPage() {
   const supabase = createClient();
 
-  const [{ data: accounts }, { data: categories }, { data: subcategories }] = await Promise.all([
+  const [{ data: accounts }, { data: categories }, { data: subcategories }, { data: incomeSources }] = await Promise.all([
     supabase.from("accounts").select("id, name").order("name"),
-    supabase.from("categories").select("id, name, group_name").order("group_name"),
+    supabase.from("categories").select("id, name, group_name, default_personal_or_office").order("group_name"),
     supabase.from("subcategories").select("id, name, category_id").order("name"),
+    supabase.from("commitments").select("id, name").eq("commitment_type", "expected_income").order("name"),
   ]);
 
   return (
@@ -22,6 +23,7 @@ export default async function AddEntryPage() {
           accounts={accounts || []}
           categories={categories || []}
           subcategories={subcategories || []}
+          incomeSources={incomeSources || []}
         />
       </div>
     </div>

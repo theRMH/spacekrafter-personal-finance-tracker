@@ -1,8 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatInr, formatDate } from "@/lib/format";
-import { commitmentDisplayStatus, STATUS_STYLE } from "@/lib/commitments";
-import { markCommitmentPaid } from "../insurance/actions";
 import AddConnectionForm from "./add-connection-form";
+import ConnectionRow from "./connection-row";
 
 export default async function UtilitiesPage() {
   const supabase = createClient();
@@ -35,30 +33,9 @@ export default async function UtilitiesPage() {
             </tr>
           </thead>
           <tbody>
-            {(connections || []).map((c: any) => {
-              const status = commitmentDisplayStatus(c.status, c.due_date);
-              return (
-                <tr key={c.id} className="border-t border-[#edf0ee]">
-                  <td className="p-3 font-semibold">{c.name}</td>
-                  <td className="p-3">{c.utility_details?.utility_type}</td>
-                  <td className="p-3">{c.utility_details?.location}</td>
-                  <td className="p-3">{c.provider ?? "-"}</td>
-                  <td className="p-3">{c.expected_amount ? formatInr(c.expected_amount) : "-"}</td>
-                  <td className="p-3">{formatDate(c.due_date)}</td>
-                  <td className="p-3">
-                    <span className={`inline-flex rounded-full px-2 py-1 font-bold capitalize ${STATUS_STYLE[status]}`}>{status}</span>
-                  </td>
-                  <td className="p-3">
-                    {status !== "paid" && (
-                      <form action={markCommitmentPaid}>
-                        <input type="hidden" name="id" value={c.id} />
-                        <button type="submit" className="text-info text-[11px] font-semibold">Mark paid</button>
-                      </form>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {(connections || []).map((c: any) => (
+              <ConnectionRow key={c.id} connection={c} accounts={accounts || []} />
+            ))}
             {(!connections || connections.length === 0) && (
               <tr>
                 <td colSpan={8} className="p-6 text-center text-muted">No connections yet — add one below.</td>

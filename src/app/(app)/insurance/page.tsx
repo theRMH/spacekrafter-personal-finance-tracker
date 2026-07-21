@@ -1,8 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatInr, formatDate } from "@/lib/format";
-import { commitmentDisplayStatus, STATUS_STYLE } from "@/lib/commitments";
-import { markCommitmentPaid } from "./actions";
 import AddPolicyForm from "./add-policy-form";
+import PolicyRow from "./policy-row";
 
 export default async function InsurancePage() {
   const supabase = createClient();
@@ -35,32 +33,9 @@ export default async function InsurancePage() {
             </tr>
           </thead>
           <tbody>
-            {(policies || []).map((p: any) => {
-              const status = commitmentDisplayStatus(p.status, p.due_date);
-              return (
-                <tr key={p.id} className="border-t border-[#edf0ee]">
-                  <td className="p-3 font-semibold">{p.name}</td>
-                  <td className="p-3">{p.insurance_details?.insurance_type}</td>
-                  <td className="p-3">{p.insurance_details?.insured_person_or_asset ?? "-"}</td>
-                  <td className="p-3">{p.provider ?? "-"}</td>
-                  <td className="p-3">{p.expected_amount ? formatInr(p.expected_amount) : "-"}</td>
-                  <td className="p-3">{formatDate(p.due_date)}</td>
-                  <td className="p-3">
-                    <span className={`inline-flex rounded-full px-2 py-1 font-bold capitalize ${STATUS_STYLE[status]}`}>{status}</span>
-                  </td>
-                  <td className="p-3">
-                    {status !== "paid" && (
-                      <form action={markCommitmentPaid}>
-                        <input type="hidden" name="id" value={p.id} />
-                        <button type="submit" className="text-info text-[11px] font-semibold">
-                          Mark paid
-                        </button>
-                      </form>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {(policies || []).map((p: any) => (
+              <PolicyRow key={p.id} policy={p} accounts={accounts || []} />
+            ))}
             {(!policies || policies.length === 0) && (
               <tr>
                 <td colSpan={8} className="p-6 text-center text-muted">No policies yet — add one below.</td>
