@@ -5,7 +5,7 @@ import UploadForm from "./upload-form";
 export default async function ImportPage() {
   const supabase = createClient();
 
-  const [{ data: accounts }, { data: mappings }, { data: batches }] = await Promise.all([
+  const [{ data: accounts }, { data: mappings }, { data: batches }, { data: categories }, { data: subcategories }] = await Promise.all([
     supabase.from("accounts").select("id, name").order("name"),
     supabase.from("import_mappings").select("account_id, column_mapping"),
     supabase
@@ -13,6 +13,8 @@ export default async function ImportPage() {
       .select("id, file_name, total_rows, accepted, duplicates, transfers, matched, unknown, rejected, created_at, accounts(name)")
       .order("created_at", { ascending: false })
       .limit(10),
+    supabase.from("categories").select("id, group_name, name").order("group_name"),
+    supabase.from("subcategories").select("id, name, category_id").order("name"),
   ]);
 
   const savedMappings = Object.fromEntries((mappings || []).map((m) => [m.account_id, m.column_mapping]));
@@ -23,7 +25,12 @@ export default async function ImportPage() {
       <p className="text-sm text-muted mt-1 mb-6">Upload statements, automate categorisation and confirm only exceptions</p>
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6 mb-8">
-        <UploadForm accounts={accounts || []} savedMappings={savedMappings as any} />
+        <UploadForm
+          accounts={accounts || []}
+          savedMappings={savedMappings as any}
+          categories={categories || []}
+          subcategories={subcategories || []}
+        />
       </div>
 
       <div className="notice bg-[#f0f3f8] border border-[#d9e0ec] rounded-2xl p-4 text-xs text-[#394a68] mb-8">

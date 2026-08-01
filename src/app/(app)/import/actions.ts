@@ -13,6 +13,23 @@ export type ImportMapping = {
   reference?: string;
 };
 
+export type PreviewRow = {
+  date: string;
+  narration: string;
+  reference: string;
+  amount: number;
+  type: "income" | "expense" | "transfer";
+  personal_or_office: "personal" | "office" | "shared";
+  category_id: string | null;
+  subcategory_id: string | null;
+  status: "confirmed" | "needs_review" | "duplicate" | "transfer";
+  fingerprint: string;
+  linked_commitment_id: string | null;
+  // resolved labels for display only
+  category_name: string | null;
+  subcategory_name: string | null;
+};
+
 function parseAmount(v: string | undefined) {
   if (!v) return 0;
   const cleaned = String(v).replace(/[,₹\s]/g, "");
@@ -35,24 +52,14 @@ function daysBetween(a: string, b: string) {
   return Math.abs((new Date(a).getTime() - new Date(b).getTime()) / 86400000);
 }
 
-export async function processImport(
+// Shared enrichment logic — returns preview rows without writing to DB.
+async function enrichRows(
+  supabase: ReturnType<typeof createClient>,
+  ownerId: string,
   accountId: string,
   mapping: ImportMapping,
-  rows: Record<string, string>[],
-  fileName: string
-) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-  const ownerId = await getEffectiveOwnerId(supabase, user.id);
-
-  await supabase.from("import_mappings").upsert(
-    { owner_id: ownerId, account_id: accountId, label: "last_used", column_mapping: mapping },
-    { onConflict: "owner_id,account_id,label" }
-  );
-
+  rows: Record<string, string>[]
+): Promise<PreviewRow[]> {
   const { data: existingTx } = await supabase
     .from("transactions")
     .select("id, fingerprint, status, amount, type, transaction_date, account_id")
@@ -81,23 +88,16 @@ export async function processImport(
     .eq("linked_account_id", accountId)
     .in("status", ["upcoming", "due", "overdue"]);
 
+  const { data: categories } = await supabase.from("categories").select("id, group_name, name");
+  const { data: subcategories } = await supabase.from("subcategories").select("id, name, category_id");
+  const catMap = Object.fromEntries((categories || []).map((c) => [c.id, c.group_name || c.name]));
+  const subMap = Object.fromEntries((subcategories || []).map((s) => [s.id, s.name]));
+
   const usedCommitmentIds = new Set<string>();
-  const usedProvisionalIds = new Set<string>();
   const usedTransferIds = new Set<string>();
+  const seenFingerprints = new Set(existingFingerprints);
 
-  let accepted = 0,
-    duplicates = 0,
-    transfers = 0,
-    matched = 0,
-    unknown = 0,
-    rejected = 0;
-
-  const { data: batch, error: batchErr } = await supabase
-    .from("import_batches")
-    .insert({ owner_id: ownerId, account_id: accountId, file_name: fileName, column_mapping: mapping, total_rows: rows.length })
-    .select()
-    .single();
-  if (batchErr) throw new Error(batchErr.message);
+  const result: PreviewRow[] = [];
 
   for (const row of rows) {
     const date = parseDate(mapping.date ? row[mapping.date] : undefined);
@@ -113,50 +113,29 @@ export async function processImport(
     } else {
       const debit = mapping.debit ? parseAmount(row[mapping.debit]) : 0;
       const credit = mapping.credit ? parseAmount(row[mapping.credit]) : 0;
-      if (debit > 0) {
-        amount = debit;
-        type = "expense";
-      } else {
-        amount = credit;
-        type = "income";
-      }
+      if (debit > 0) { amount = debit; type = "expense"; }
+      else { amount = credit; type = "income"; }
     }
 
-    if (!date || !amount) {
-      rejected++;
-      continue;
-    }
+    if (!date || !amount) continue;
 
     const fingerprint = `${date}|${amount}|${(reference || narration).toLowerCase().replace(/\s+/g, "")}`;
-    if (existingFingerprints.has(fingerprint)) {
-      duplicates++;
+
+    if (seenFingerprints.has(fingerprint)) {
+      result.push({
+        date, narration, reference, amount, type,
+        personal_or_office: "personal",
+        category_id: null, subcategory_id: null,
+        status: "duplicate",
+        fingerprint,
+        linked_commitment_id: null,
+        category_name: null, subcategory_name: null,
+      });
       continue;
     }
-    existingFingerprints.add(fingerprint);
+    seenFingerprints.add(fingerprint);
 
-    // 1. Merge into a matching provisional manual entry on the same account (BR-03/BR-07).
-    const provisionalMatch = allTx.find(
-      (t) =>
-        !usedProvisionalIds.has(t.id) &&
-        t.account_id === accountId &&
-        t.status === "provisional" &&
-        t.type === type &&
-        Math.abs(Number(t.amount) - amount) < 1 &&
-        daysBetween(t.transaction_date, date) <= 3
-    );
-
-    if (provisionalMatch) {
-      usedProvisionalIds.add(provisionalMatch.id);
-      await supabase
-        .from("transactions")
-        .update({ status: "confirmed", reference: reference || null, narration: narration || null, import_batch_id: batch.id, fingerprint })
-        .eq("id", provisionalMatch.id);
-      accepted++;
-      matched++;
-      continue;
-    }
-
-    // 2. Internal transfer detection against another owned account.
+    // Transfer detection
     const oppositeType = type === "income" ? "expense" : "income";
     const transferMatch = allTx.find(
       (t) =>
@@ -168,93 +147,226 @@ export async function processImport(
         daysBetween(t.transaction_date, date) <= 3
     );
 
-    let finalType: string = type;
+    if (transferMatch) {
+      usedTransferIds.add(transferMatch.id);
+      result.push({
+        date, narration, reference, amount, type: "transfer",
+        personal_or_office: "personal",
+        category_id: null, subcategory_id: null,
+        status: "transfer",
+        fingerprint,
+        linked_commitment_id: null,
+        category_name: null, subcategory_name: null,
+      });
+      continue;
+    }
+
+    // Commitment match
     let linkedCommitmentId: string | null = null;
     let categoryId: string | null = null;
     let subcategoryId: string | null = null;
-    let personalOrOffice = "personal";
+    let personalOrOffice: "personal" | "office" | "shared" = "personal";
     let status: "confirmed" | "needs_review" = "needs_review";
 
-    if (transferMatch) {
-      usedTransferIds.add(transferMatch.id);
-      finalType = "transfer";
-      status = "confirmed";
-      transfers++;
-    } else {
-      const commitmentMatch = (commitments || []).find(
-        (c) =>
-          !usedCommitmentIds.has(c.id) &&
-          c.expected_amount &&
-          Math.abs(Number(c.expected_amount) - amount) <= Math.max(5, Number(c.expected_amount) * 0.05) &&
-          daysBetween(c.due_date, date) <= (c.reminder_lead_days || 14)
-      );
+    const commitmentMatch = (commitments || []).find(
+      (c) =>
+        !usedCommitmentIds.has(c.id) &&
+        c.expected_amount &&
+        Math.abs(Number(c.expected_amount) - amount) <= Math.max(5, Number(c.expected_amount) * 0.05) &&
+        daysBetween(c.due_date, date) <= (c.reminder_lead_days || 14)
+    );
 
-      if (commitmentMatch) {
-        usedCommitmentIds.add(commitmentMatch.id);
-        linkedCommitmentId = commitmentMatch.id;
-        personalOrOffice = commitmentMatch.personal_or_office;
+    if (commitmentMatch) {
+      usedCommitmentIds.add(commitmentMatch.id);
+      linkedCommitmentId = commitmentMatch.id;
+      personalOrOffice = commitmentMatch.personal_or_office;
+      status = "confirmed";
+    } else {
+      const upperNarration = narration.toUpperCase();
+      const rule = (rules || []).find(
+        (r) => upperNarration.includes(r.keyword) && (!r.account_id || r.account_id === accountId)
+      );
+      if (rule) {
+        categoryId = rule.category_id;
+        subcategoryId = rule.subcategory_id;
+        personalOrOffice = rule.personal_or_office || "personal";
         status = "confirmed";
-        matched++;
       } else {
-        const upperNarration = narration.toUpperCase();
-        const rule = (rules || []).find((r) => upperNarration.includes(r.keyword) && (!r.account_id || r.account_id === accountId));
-        if (rule) {
-          categoryId = rule.category_id;
-          subcategoryId = rule.subcategory_id;
-          personalOrOffice = rule.personal_or_office || "personal";
+        const hist = (pastConfirmed || []).find(
+          (p) => p.payee_payer && upperNarration.includes(String(p.payee_payer).toUpperCase())
+        );
+        if (hist) {
+          categoryId = hist.category_id;
+          subcategoryId = hist.subcategory_id;
+          personalOrOffice = hist.personal_or_office;
           status = "confirmed";
         } else {
-          const hist = (pastConfirmed || []).find(
-            (p) => p.payee_payer && upperNarration.includes(String(p.payee_payer).toUpperCase())
-          );
-          if (hist) {
-            categoryId = hist.category_id;
-            subcategoryId = hist.subcategory_id;
-            personalOrOffice = hist.personal_or_office;
-            status = "confirmed";
-          } else {
-            status = "needs_review";
-            unknown++;
-          }
+          status = "needs_review";
         }
       }
     }
+
+    result.push({
+      date, narration, reference, amount, type,
+      personal_or_office: personalOrOffice,
+      category_id: categoryId,
+      subcategory_id: subcategoryId,
+      status,
+      fingerprint,
+      linked_commitment_id: linkedCommitmentId,
+      category_name: categoryId ? (catMap[categoryId] ?? null) : null,
+      subcategory_name: subcategoryId ? (subMap[subcategoryId] ?? null) : null,
+    });
+  }
+
+  return result;
+}
+
+export async function previewImport(
+  accountId: string,
+  mapping: ImportMapping,
+  rows: Record<string, string>[]
+): Promise<PreviewRow[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+  const ownerId = await getEffectiveOwnerId(supabase, user.id);
+  return enrichRows(supabase, ownerId, accountId, mapping, rows);
+}
+
+export async function commitImport(
+  accountId: string,
+  mapping: ImportMapping,
+  previewRows: PreviewRow[],
+  fileName: string
+) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+  const ownerId = await getEffectiveOwnerId(supabase, user.id);
+
+  await supabase.from("import_mappings").upsert(
+    { owner_id: ownerId, account_id: accountId, label: "last_used", column_mapping: mapping },
+    { onConflict: "owner_id,account_id,label" }
+  );
+
+  // Fetch all existing transactions once for provisional + transfer linking
+  const { data: existingTx } = await supabase
+    .from("transactions")
+    .select("id, fingerprint, status, amount, type, transaction_date, account_id")
+    .is("deleted_at", null);
+  const allTx = existingTx || [];
+
+  const rowsToCommit = previewRows.filter((r) => r.status !== "duplicate");
+  const total = previewRows.length;
+
+  const { data: batch, error: batchErr } = await supabase
+    .from("import_batches")
+    .insert({
+      owner_id: ownerId,
+      account_id: accountId,
+      file_name: fileName,
+      column_mapping: mapping,
+      total_rows: total,
+    })
+    .select()
+    .single();
+  if (batchErr) throw new Error(batchErr.message);
+
+  let accepted = 0, duplicates = 0, transfers = 0, matched = 0, unknown = 0, rejected = 0;
+  duplicates = previewRows.filter((r) => r.status === "duplicate").length;
+
+  const usedProvisionalIds = new Set<string>();
+  const usedTransferIds = new Set<string>();
+
+  for (const row of rowsToCommit) {
+    if (row.status === "transfer") {
+      transfers++;
+    } else if (row.linked_commitment_id) {
+      matched++;
+    } else if (row.status === "needs_review") {
+      unknown++;
+    }
+
+    // Check for provisional match to merge into
+    const provisionalMatch = allTx.find(
+      (t) =>
+        !usedProvisionalIds.has(t.id) &&
+        t.account_id === accountId &&
+        t.status === "provisional" &&
+        t.type === row.type &&
+        Math.abs(Number(t.amount) - row.amount) < 1 &&
+        daysBetween(t.transaction_date, row.date) <= 3
+    );
+
+    if (provisionalMatch) {
+      usedProvisionalIds.add(provisionalMatch.id);
+      await supabase
+        .from("transactions")
+        .update({
+          status: "confirmed",
+          reference: row.reference || null,
+          narration: row.narration || null,
+          import_batch_id: batch.id,
+          fingerprint: row.fingerprint,
+        })
+        .eq("id", provisionalMatch.id);
+      accepted++;
+      matched++;
+      continue;
+    }
+
+    const finalStatus = row.status === "transfer" ? "confirmed"
+      : row.status === "needs_review" ? "needs_review"
+      : "confirmed";
 
     const { data: inserted, error: insErr } = await supabase
       .from("transactions")
       .insert({
         owner_id: ownerId,
-        transaction_date: date,
-        amount,
-        type: finalType,
-        personal_or_office: personalOrOffice,
+        transaction_date: row.date,
+        amount: row.amount,
+        type: row.type,
+        personal_or_office: row.personal_or_office,
         account_id: accountId,
-        category_id: categoryId,
-        subcategory_id: subcategoryId,
-        payee_payer: narration || null,
-        reference: reference || null,
-        narration: narration || null,
-        status,
+        category_id: row.category_id,
+        subcategory_id: row.subcategory_id,
+        payee_payer: row.narration || null,
+        reference: row.reference || null,
+        narration: row.narration || null,
+        status: finalStatus,
         source: "imported",
         import_batch_id: batch.id,
-        fingerprint,
-        linked_commitment_id: linkedCommitmentId,
+        fingerprint: row.fingerprint,
+        linked_commitment_id: row.linked_commitment_id,
       })
       .select()
       .single();
 
-    if (insErr || !inserted) {
-      rejected++;
-      continue;
-    }
+    if (insErr || !inserted) { rejected++; continue; }
     accepted++;
 
-    if (transferMatch) {
-      await supabase.from("transactions").update({ type: "transfer", status: "confirmed", transfer_pair_id: inserted.id }).eq("id", transferMatch.id);
-      await supabase.from("transactions").update({ transfer_pair_id: transferMatch.id }).eq("id", inserted.id);
+    // Link transfer pair
+    if (row.status === "transfer") {
+      const oppositeType = row.type === "income" ? "expense" : "income";
+      const transferMatch = allTx.find(
+        (t) =>
+          !usedTransferIds.has(t.id) &&
+          t.account_id !== accountId &&
+          (t.status === "confirmed" || t.status === "provisional") &&
+          t.type === oppositeType &&
+          Math.abs(Number(t.amount) - row.amount) < 1 &&
+          daysBetween(t.transaction_date, row.date) <= 3
+      );
+      if (transferMatch) {
+        usedTransferIds.add(transferMatch.id);
+        await supabase.from("transactions").update({ type: "transfer", status: "confirmed", transfer_pair_id: inserted.id }).eq("id", transferMatch.id);
+        await supabase.from("transactions").update({ transfer_pair_id: transferMatch.id }).eq("id", inserted.id);
+      }
     }
-    if (linkedCommitmentId) {
-      await supabase.from("commitments").update({ status: "paid", linked_transaction_id: inserted.id }).eq("id", linkedCommitmentId);
+
+    if (row.linked_commitment_id) {
+      await supabase.from("commitments").update({ status: "paid", linked_transaction_id: inserted.id }).eq("id", row.linked_commitment_id);
     }
   }
 
@@ -279,5 +391,5 @@ export async function processImport(
   revalidatePath("/subscriptions");
   revalidatePath("/calendar");
 
-  return { batchId: batch.id, total: rows.length, accepted, duplicates, transfers, matched, unknown, rejected };
+  return { batchId: batch.id, total, accepted, duplicates, transfers, matched, unknown, rejected };
 }

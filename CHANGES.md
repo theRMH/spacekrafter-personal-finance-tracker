@@ -2,6 +2,20 @@
 
 Per-session changelog for this project. See `CLAUDE.md` for the logging format and the `⚠ DEPLOY` rule.
 
+## 2026-08-01
+
+### Import page: pre-commit verification step
+**Commit:** Uncommitted
+- **Changed:** `src/app/(app)/import/actions.ts` — replaced `processImport` with `previewImport` (dry-run, no DB writes, returns enriched rows) and `commitImport` (accepts user-edited rows, writes to DB). All categorisation logic shared via internal `enrichRows()`.
+- **Added:** `src/app/(app)/import/review-table.tsx` — new client component; shows all parsed rows in a table with inline dropdowns for Category, Subcategory, and Personal/Office; amber highlight for `needs_review` rows; per-row remove button; summary bar; Back + Confirm buttons.
+- **Changed:** `src/app/(app)/import/upload-form.tsx` — split flow into 3 steps: (1) upload + column mapping → "Preview import" button, (2) review table, (3) result tiles; accepts `categories` and `subcategories` props.
+- **Changed:** `src/app/(app)/import/page.tsx` — added `categories` and `subcategories` queries; passes them to `UploadForm`.
+
+### Import page: added sample Excel download
+**Commit:** Uncommitted
+- **Added:** `public/sample_statement.xlsx` — 10-row sample bank statement with columns `Date, Narration, Debit, Credit, Reference` matching the import page's auto-mapping logic; generated once via `scripts/generate-sample-xlsx.mjs` (script can be deleted)
+- **Changed:** `src/app/(app)/import/upload-form.tsx` — added `↓ Download sample Excel` anchor link above the file input, pointing to `/sample_statement.xlsx` as a static Next.js public asset; no JS, no new runtime dependency
+
 ## 2026-07-22 (continued, edit action for Insurance/Utilities/Subscriptions)
 
 ### Added the same Edit action to Insurance, Utilities, and Subscriptions

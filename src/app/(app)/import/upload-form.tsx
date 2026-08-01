@@ -3,10 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
-import { processImport, type ImportMapping } from "./actions";
+import { previewImport, commitImport, type ImportMapping, type PreviewRow } from "./actions";
+import ReviewTable from "./review-table";
 
 type Account = { id: string; name: string };
 type SavedMapping = Record<string, ImportMapping>;
+type Category = { id: string; group_name: string; name: string };
+type Subcategory = { id: string; name: string; category_id: string };
+
+type Props = {
+  accounts: Account[];
+  savedMappings: SavedMapping;
+  categories: Category[];
+  subcategories: Subcategory[];
+};
 
 const FIELD_LABELS: { key: keyof ImportMapping; label: string }[] = [
   { key: "date", label: "Date column" },
@@ -30,7 +40,7 @@ function guessMapping(headers: string[]): ImportMapping {
   };
 }
 
-export default function UploadForm({ accounts, savedMappings }: { accounts: Account[]; savedMappings: SavedMapping }) {
+export default function UploadForm({ accounts, savedMappings, categories, subcategories }: Props) {
   const router = useRouter();
   const [accountId, setAccountId] = useState("");
   const [fileName, setFileName] = useState("");
@@ -38,13 +48,17 @@ export default function UploadForm({ accounts, savedMappings }: { accounts: Acco
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [mapping, setMapping] = useState<ImportMapping>({ date: "", narration: "" });
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<Awaited<ReturnType<typeof processImport>> | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Preview step state
+  const [previewRows, setPreviewRows] = useState<PreviewRow[] | null>(null);
+  const [result, setResult] = useState<Awaited<ReturnType<typeof commitImport>> | null>(null);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
+    setPreviewRows(null);
     setResult(null);
     setError(null);
 
@@ -60,7 +74,7 @@ export default function UploadForm({ accounts, savedMappings }: { accounts: Acco
     });
   }
 
-  async function handleSubmit() {
+  async function handlePreview() {
     if (!accountId || !mapping.date || !mapping.narration || rows.length === 0) {
       setError("Select an account, upload a file, and map at least Date + Narration.");
       return;
@@ -68,8 +82,22 @@ export default function UploadForm({ accounts, savedMappings }: { accounts: Acco
     setBusy(true);
     setError(null);
     try {
-      const summary = await processImport(accountId, mapping, rows, fileName);
+      const preview = await previewImport(accountId, mapping, rows);
+      setPreviewRows(preview);
+    } catch (err: any) {
+      setError(err.message || "Preview failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCommit(confirmedRows: PreviewRow[]) {
+    setBusy(true);
+    setError(null);
+    try {
+      const summary = await commitImport(accountId, mapping, confirmedRows, fileName);
       setResult(summary);
+      setPreviewRows(null);
       router.refresh();
     } catch (err: any) {
       setError(err.message || "Import failed");
@@ -78,6 +106,56 @@ export default function UploadForm({ accounts, savedMappings }: { accounts: Acco
     }
   }
 
+  // Step 3: done — show result tiles
+  if (result) {
+    return (
+      <div className="grid gap-4">
+        <p className="text-sm font-semibold text-navy">Import complete</p>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          {([
+            ["Total rows", result.total],
+            ["Accepted", result.accepted],
+            ["Duplicates", result.duplicates],
+            ["Transfers", result.transfers],
+            ["Matched", result.matched],
+            ["Needs review", result.unknown],
+          ] as [string, number][]).map(([label, value]) => (
+            <div key={label} className="bg-white border border-[#e3ddd7] rounded-xl p-3 text-center">
+              <div className="text-lg font-extrabold text-navy">{value}</div>
+              <div className="text-[10px] text-muted mt-1">{label}</div>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => { setResult(null); setRows([]); setHeaders([]); setFileName(""); }}
+          className="text-xs text-navy underline underline-offset-2 text-left"
+        >
+          Import another file
+        </button>
+      </div>
+    );
+  }
+
+  // Step 2: review table
+  if (previewRows) {
+    return (
+      <div className="grid gap-4">
+        <p className="text-sm font-semibold text-navy">Review before importing</p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <ReviewTable
+          rows={previewRows}
+          categories={categories}
+          subcategories={subcategories}
+          onConfirm={handleCommit}
+          onBack={() => setPreviewRows(null)}
+          busy={busy}
+        />
+      </div>
+    );
+  }
+
+  // Step 1: upload + mapping
   return (
     <div className="grid gap-5">
       <div className="grid sm:grid-cols-2 gap-4">
@@ -98,7 +176,16 @@ export default function UploadForm({ accounts, savedMappings }: { accounts: Acco
           </select>
         </div>
         <div>
-          <label className="block text-xs text-muted mb-1.5">Statement file (CSV)</label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs text-muted">Statement file (CSV)</label>
+            <a
+              href="/sample_statement.xlsx"
+              download
+              className="text-[11px] text-navy underline underline-offset-2 hover:opacity-70"
+            >
+              ↓ Download sample Excel
+            </a>
+          </div>
           <input type="file" accept=".csv" onChange={handleFile} className="w-full text-xs" />
         </div>
       </div>
@@ -130,30 +217,12 @@ export default function UploadForm({ accounts, savedMappings }: { accounts: Acco
 
       <button
         type="button"
-        onClick={handleSubmit}
+        onClick={handlePreview}
         disabled={busy || rows.length === 0}
         className="bg-navy text-white font-semibold rounded-xl py-3 text-sm disabled:opacity-50"
       >
-        {busy ? "Processing…" : "Upload and process"}
+        {busy ? "Analysing…" : "Preview import"}
       </button>
-
-      {result && (
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mt-2">
-          {[
-            ["Total rows", result.total],
-            ["Accepted", result.accepted],
-            ["Duplicates", result.duplicates],
-            ["Transfers", result.transfers],
-            ["Matched", result.matched],
-            ["Needs review", result.unknown],
-          ].map(([label, value]) => (
-            <div key={label as string} className="bg-white border border-[#e3ddd7] rounded-xl p-3 text-center">
-              <div className="text-lg font-extrabold text-navy">{value}</div>
-              <div className="text-[10px] text-muted mt-1">{label}</div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
