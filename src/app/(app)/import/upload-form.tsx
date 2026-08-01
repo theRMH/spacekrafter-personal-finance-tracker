@@ -75,10 +75,10 @@ export default function UploadForm({ accounts, savedMappings, categories, subcat
   }
 
   async function handlePreview() {
-    if (!accountId || !mapping.date || !mapping.narration || rows.length === 0) {
-      setError("Select an account, upload a file, and map at least Date + Narration.");
-      return;
-    }
+    if (!accountId) { setError("Please select an account first."); return; }
+    if (rows.length === 0) { setError("Please upload a CSV file."); return; }
+    if (!mapping.date) { setError("Please map the Date column."); return; }
+    if (!mapping.narration) { setError("Please map the Narration / Description column."); return; }
     setBusy(true);
     setError(null);
     try {
@@ -218,7 +218,7 @@ export default function UploadForm({ accounts, savedMappings, categories, subcat
       <button
         type="button"
         onClick={handlePreview}
-        disabled={busy || rows.length === 0}
+        disabled={busy}
         className="bg-navy text-white font-semibold rounded-xl py-3 text-sm disabled:opacity-50"
       >
         {busy ? "Analysing…" : "Preview import"}
