@@ -25,6 +25,8 @@ const FIELD_LABELS: { key: keyof ImportMapping; label: string }[] = [
   { key: "credit", label: "Credit / Deposit column (optional)" },
   { key: "amount", label: "Signed amount column (use instead of debit/credit)" },
   { key: "reference", label: "Reference column (optional)" },
+  { key: "category", label: "Category column (optional)" },
+  { key: "subcategory", label: "Subcategory column (optional)" },
 ];
 
 function guessMapping(headers: string[]): ImportMapping {
@@ -37,6 +39,8 @@ function guessMapping(headers: string[]): ImportMapping {
     credit: find(["credit", "deposit"]),
     amount: find(["amount"]),
     reference: find(["reference", "ref no", "ref"]),
+    category: find(["category"]),
+    subcategory: find(["subcategory"]),
   };
 }
 

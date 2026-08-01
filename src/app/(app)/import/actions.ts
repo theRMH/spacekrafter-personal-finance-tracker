@@ -11,6 +11,8 @@ export type ImportMapping = {
   credit?: string;
   amount?: string;
   reference?: string;
+  category?: string;
+  subcategory?: string;
 };
 
 export type PreviewRow = {
@@ -92,6 +94,9 @@ async function enrichRows(
   const { data: subcategories } = await supabase.from("subcategories").select("id, name, category_id");
   const catMap = Object.fromEntries((categories || []).map((c) => [c.id, c.group_name || c.name]));
   const subMap = Object.fromEntries((subcategories || []).map((s) => [s.id, s.name]));
+  // name → id lookups for category/subcategory columns in the uploaded file
+  const catNameToId = Object.fromEntries((categories || []).map((c) => [(c.group_name || c.name).toLowerCase(), c.id]));
+  const subNameToId = Object.fromEntries((subcategories || []).map((s) => [s.name.toLowerCase(), s.id]));
 
   const usedCommitmentIds = new Set<string>();
   const usedTransferIds = new Set<string>();
@@ -161,12 +166,18 @@ async function enrichRows(
       continue;
     }
 
+    // Category/subcategory from the uploaded file columns (highest priority)
+    const inlineCatName = (mapping.category ? row[mapping.category] : "")?.trim().toLowerCase();
+    const inlineSubName = (mapping.subcategory ? row[mapping.subcategory] : "")?.trim().toLowerCase();
+    const inlineCatId = inlineCatName ? (catNameToId[inlineCatName] ?? null) : null;
+    const inlineSubId = inlineSubName ? (subNameToId[inlineSubName] ?? null) : null;
+
     // Commitment match
     let linkedCommitmentId: string | null = null;
-    let categoryId: string | null = null;
-    let subcategoryId: string | null = null;
+    let categoryId: string | null = inlineCatId;
+    let subcategoryId: string | null = inlineSubId;
     let personalOrOffice: "personal" | "office" | "shared" = "personal";
-    let status: "confirmed" | "needs_review" = "needs_review";
+    let status: "confirmed" | "needs_review" = inlineCatId ? "confirmed" : "needs_review";
 
     const commitmentMatch = (commitments || []).find(
       (c) =>
@@ -181,7 +192,8 @@ async function enrichRows(
       linkedCommitmentId = commitmentMatch.id;
       personalOrOffice = commitmentMatch.personal_or_office;
       status = "confirmed";
-    } else {
+    } else if (!inlineCatId) {
+      // Only run rules/history if the file didn't supply a category
       const upperNarration = narration.toUpperCase();
       const rule = (rules || []).find(
         (r) => upperNarration.includes(r.keyword) && (!r.account_id || r.account_id === accountId)

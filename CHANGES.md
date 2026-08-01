@@ -2,6 +2,15 @@
 
 Per-session changelog for this project. See `CLAUDE.md` for the logging format and the `⚠ DEPLOY` rule.
 
+## 2026-08-01 (continued)
+
+### Import: category/subcategory column support in upload + sample Excel
+**Commit:** Uncommitted
+- **Changed:** `src/app/(app)/import/actions.ts` — added `category` and `subcategory` to `ImportMapping`; `enrichRows` now reads those columns from the uploaded file, looks up matching category/subcategory IDs by name, and marks the row `confirmed` immediately — skipping rules/history lookup when the file already supplies a category
+- **Changed:** `src/app/(app)/import/upload-form.tsx` — added Category and Subcategory to `FIELD_LABELS` and `guessMapping` so they auto-detect and appear as mappable columns in the column mapping UI
+- **Changed:** `scripts/generate-sample-xlsx.mjs` — added Category and Subcategory columns with realistic values to the sample Excel
+- **Changed:** `public/sample_statement.xlsx` — regenerated with Category and Subcategory columns
+
 ## 2026-08-01
 
 ### Import page: pre-commit verification step
