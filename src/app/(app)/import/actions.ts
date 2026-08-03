@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/auth";
+import { detectPaymentMode } from "@/lib/payment-mode";
 
 export type ImportMapping = {
   date: string;
@@ -351,6 +352,7 @@ export async function commitImport(
         import_batch_id: batch.id,
         fingerprint: row.fingerprint,
         linked_commitment_id: row.linked_commitment_id,
+        payment_mode: detectPaymentMode(row.narration),
       })
       .select()
       .single();
@@ -404,4 +406,49 @@ export async function commitImport(
   revalidatePath("/calendar");
 
   return { batchId: batch.id, total, accepted, duplicates, transfers, matched, unknown, rejected };
+}
+
+// Undoes an import: rows this batch created outright are deleted; rows that
+// were pre-existing manual/provisional entries merely matched and confirmed
+// by it are reverted to provisional instead of deleted (they weren't created
+// by this import, just enriched by it). Any commitment this batch auto-matched
+// is reset to upcoming so it isn't left pointing at a deleted transaction.
+export async function deleteImportBatch(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const batchId = String(formData.get("id"));
+
+  const { data: txs } = await supabase.from("transactions").select("id, source").eq("import_batch_id", batchId);
+  const txIds = (txs || []).map((t) => t.id);
+
+  if (txIds.length > 0) {
+    await supabase.from("commitments").update({ status: "upcoming", linked_transaction_id: null }).in("linked_transaction_id", txIds);
+    await supabase.from("transactions").update({ transfer_pair_id: null }).in("transfer_pair_id", txIds);
+
+    const createdIds = (txs || []).filter((t) => t.source === "imported").map((t) => t.id);
+    if (createdIds.length > 0) {
+      await supabase.from("transactions").delete().in("id", createdIds);
+    }
+
+    const mergedIds = (txs || []).filter((t) => t.source !== "imported").map((t) => t.id);
+    if (mergedIds.length > 0) {
+      await supabase.from("transactions").update({ status: "provisional", import_batch_id: null }).in("id", mergedIds);
+    }
+  }
+
+  const { error } = await supabase.from("import_batches").delete().eq("id", batchId).eq("owner_id", user.id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/import");
+  revalidatePath("/transactions");
+  revalidatePath("/dashboard");
+  revalidatePath("/accounts");
+  revalidatePath("/insurance");
+  revalidatePath("/utilities");
+  revalidatePath("/subscriptions");
+  revalidatePath("/calendar");
 }

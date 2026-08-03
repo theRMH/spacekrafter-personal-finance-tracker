@@ -1,22 +1,37 @@
 import { createClient } from "@/lib/supabase/server";
 import AddPolicyForm from "./add-policy-form";
 import PolicyRow from "./policy-row";
+import DateRangeFilter from "@/components/date-range-filter";
 
-export default async function InsurancePage() {
+export default async function InsurancePage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const supabase = createClient();
+  const fromDate = searchParams?.from;
+  const toDate = searchParams?.to;
 
-  const { data: policies } = await supabase
+  let query = supabase
     .from("commitments")
     .select("id, name, personal_or_office, expected_amount, frequency, due_date, status, provider, insurance_details(insurance_type, policy_number, insured_person_or_asset, nominee)")
     .eq("commitment_type", "insurance")
     .order("due_date", { ascending: true });
+  if (fromDate) query = query.gte("due_date", fromDate);
+  if (toDate) query = query.lte("due_date", toDate);
+  const { data: policies } = await query;
 
   const { data: accounts } = await supabase.from("accounts").select("id, name").order("name");
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-navy">Insurance</h1>
-      <p className="text-sm text-muted mt-1 mb-6">Policies, renewals, premiums and documents</p>
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-1">
+        <div>
+          <h1 className="text-2xl font-bold text-navy">Insurance</h1>
+          <p className="text-sm text-muted mt-1 mb-6">Policies, renewals, premiums and documents</p>
+        </div>
+        <a href="/api/export/insurance" className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy">
+          Export (CSV)
+        </a>
+      </div>
+
+      <DateRangeFilter from={fromDate} to={toDate} clearHref="/insurance" />
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto mb-8">
         <table className="w-full text-xs min-w-[900px]">

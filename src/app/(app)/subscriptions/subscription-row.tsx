@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatInr, formatDate } from "@/lib/format";
 import { commitmentDisplayStatus, STATUS_STYLE, FREQUENCIES } from "@/lib/commitments";
-import { markCommitmentPaid } from "../insurance/actions";
+import { markCommitmentPaid, deleteCommitment } from "../insurance/actions";
 import { cancelSubscription, restartSubscription, updateSubscription } from "./actions";
 
 type Subscription = {
@@ -128,6 +128,10 @@ export default function SubscriptionRow({ sub, accounts }: { sub: Subscription; 
               </button>
             </form>
           )}
+          <form action={deleteCommitment} className="inline-block">
+            <input type="hidden" name="id" value={sub.id} />
+            <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">Delete</button>
+          </form>
         </div>
       </td>
     </tr>

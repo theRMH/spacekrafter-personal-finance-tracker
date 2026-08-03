@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatInr, formatDate } from "@/lib/format";
 import { commitmentDisplayStatus, STATUS_STYLE, FREQUENCIES } from "@/lib/commitments";
-import { markIncomeReceived, updateIncomeSource } from "./actions";
+import { markIncomeReceived, updateIncomeSource, deleteIncomeSource } from "./actions";
 
 const STATUS_LABEL: Record<string, string> = { paid: "Received" };
 const INCOME_TYPES = ["Rental", "Salary", "Business Revenue", "Investment Payout", "Service / AMC Revenue", "Other"];
@@ -126,6 +126,12 @@ export default function IncomeSourceRow({ source, accounts }: { source: Source; 
               </button>
             </form>
           )}
+          <form action={deleteIncomeSource}>
+            <input type="hidden" name="id" value={source.id} />
+            <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">
+              Delete
+            </button>
+          </form>
         </div>
       </td>
     </tr>

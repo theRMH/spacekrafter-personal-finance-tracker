@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { createTransaction } from "./actions";
+import { PAYMENT_MODES } from "@/lib/payment-mode";
 
 type Account = { id: string; name: string };
 type Category = { id: string; name: string; group_name: string; default_personal_or_office: string | null };
@@ -67,7 +68,6 @@ export default function EntryForm({
           >
             <option value="expense">Expense</option>
             <option value="income">Income</option>
-            <option value="transfer">Transfer</option>
           </select>
         </div>
         <div>
@@ -84,7 +84,6 @@ export default function EntryForm({
           >
             <option value="personal">Personal</option>
             <option value="office">Office</option>
-            <option value="shared">Shared</option>
           </select>
         </div>
       </div>
@@ -158,13 +157,23 @@ export default function EntryForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
+          <label className="block text-xs text-muted mb-1.5">Payment mode (optional)</label>
+          <select name="payment_mode" defaultValue="" className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
+            <option value="">-</option>
+            {PAYMENT_MODES.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="block text-xs text-muted mb-1.5">Reference</label>
           <input name="reference" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
         </div>
-        <div>
-          <label className="block text-xs text-muted mb-1.5">Reason / notes</label>
-          <input name="narration" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
-        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs text-muted mb-1.5">Reason / notes</label>
+        <input name="narration" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
       </div>
 
       <button type="submit" className="bg-navy text-white font-semibold rounded-xl py-3 text-sm">

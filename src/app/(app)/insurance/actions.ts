@@ -127,3 +127,25 @@ export async function markCommitmentPaid(formData: FormData) {
   revalidatePath("/subscriptions");
   revalidatePath("/calendar");
 }
+
+// Shared across Insurance/Utilities/Subscriptions — all three are commitment_type
+// rows with a 1:1 detail table (cascades on delete), no type-specific logic needed here.
+export async function deleteCommitment(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const id = String(formData.get("id"));
+  const { count } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("linked_commitment_id", id);
+  if ((count || 0) > 0) throw new Error("This has a linked transaction and cannot be deleted");
+
+  const { error } = await supabase.from("commitments").delete().eq("id", id).eq("owner_id", user.id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/insurance");
+  revalidatePath("/utilities");
+  revalidatePath("/subscriptions");
+  revalidatePath("/calendar");
+}

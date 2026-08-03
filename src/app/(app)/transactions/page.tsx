@@ -58,7 +58,7 @@ export default async function TransactionsPage({
   let query = supabase
     .from("transactions")
     .select(
-      "id, transaction_date, amount, type, personal_or_office, payee_payer, narration, status, source, account_id, accounts(name), categories(id, group_name), subcategories(id, name)"
+      "id, transaction_date, amount, type, personal_or_office, payee_payer, narration, status, source, account_id, payment_mode, accounts(name), categories(id, group_name), subcategories(id, name)"
     )
     .is("deleted_at", null)
     .order("transaction_date", { ascending: false })
@@ -104,6 +104,37 @@ export default async function TransactionsPage({
     { label: "Needs review", status: "needs_review" },
   ];
 
+  // Usage tabs keep every other active filter when you switch between them, same pattern as the status tabs.
+  function hrefForUsage(usage?: string) {
+    const params = new URLSearchParams();
+    if (statusFilter) params.set("status", statusFilter);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
+    if (accountFilter) params.set("account", accountFilter);
+    if (usage) params.set("usage", usage);
+    if (typeFilter) params.set("type", typeFilter);
+    if (categoryFilter) params.set("category", categoryFilter);
+    if (payeeFilter) params.set("payee", payeeFilter);
+    const qs = params.toString();
+    return qs ? `/transactions?${qs}` : "/transactions";
+  }
+  const usageFilters = [
+    { label: "All", usage: undefined },
+    { label: "Personal", usage: "personal" },
+    { label: "Office", usage: "office" },
+    { label: "Shared", usage: "shared" },
+  ];
+
+  const tx = transactions || [];
+  const scoreIncome = tx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
+  const scoreExpense = tx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  const scoreCards = [
+    { label: "Income (filtered)", value: formatInr(scoreIncome), colorClass: "text-success" },
+    { label: "Expense (filtered)", value: formatInr(scoreExpense), colorClass: "text-[#b64b52]" },
+    { label: "Net (filtered)", value: formatInr(scoreIncome - scoreExpense), colorClass: scoreIncome - scoreExpense >= 0 ? "text-success" : "text-[#b64b52]" },
+    { label: "Transactions", value: String(tx.length), colorClass: "text-navy" },
+  ];
+
   return (
     <div>
       <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
@@ -116,7 +147,16 @@ export default async function TransactionsPage({
         </Link>
       </div>
 
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        {scoreCards.map((c) => (
+          <div key={c.label} className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-4">
+            <div className="text-[11px] uppercase tracking-wide text-muted">{c.label}</div>
+            <div className={`text-lg font-extrabold mt-1 ${c.colorClass}`}>{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2 mb-3 flex-wrap">
         {filters.map((f) => (
           <Link
             key={f.label}
@@ -132,8 +172,26 @@ export default async function TransactionsPage({
         ))}
       </div>
 
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <span className="text-[11px] uppercase tracking-wide text-muted mr-1">Home / Office</span>
+        {usageFilters.map((u) => (
+          <Link
+            key={u.label}
+            href={hrefForUsage(u.usage)}
+            className={`rounded-full px-3 py-2 text-xs border font-semibold ${
+              (usageFilter ?? "") === (u.usage ?? "")
+                ? "bg-navy text-white border-navy"
+                : "bg-white border-[#e3ddd7] text-navy"
+            }`}
+          >
+            {u.label}
+          </Link>
+        ))}
+      </div>
+
       <form method="get" className="flex flex-wrap items-end gap-2 mb-4 bg-white border border-[#e3ddd7] rounded-xl p-3">
         {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
+        {usageFilter && <input type="hidden" name="usage" value={usageFilter} />}
         <div>
           <label className="block text-[10px] text-muted mb-1">From</label>
           <input type="date" name="from" defaultValue={fromDate} className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
@@ -149,15 +207,6 @@ export default async function TransactionsPage({
             {(accounts || []).map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] text-muted mb-1">Usage</label>
-          <select name="usage" defaultValue={usageFilter || ""} className="border border-[#e3ddd7] rounded-lg p-2 text-xs">
-            <option value="">All</option>
-            <option value="personal">Personal</option>
-            <option value="office">Office</option>
-            <option value="shared">Shared</option>
           </select>
         </div>
         <div>
@@ -200,6 +249,7 @@ export default async function TransactionsPage({
               <th className="text-left p-3">Account</th>
               <th className="text-left p-3">Payee / Payer</th>
               <th className="text-left p-3">Category</th>
+              <th className="text-left p-3">Mode</th>
               <th className="text-left p-3">Usage</th>
               <th className="text-left p-3">Status</th>
               <th className="text-right p-3">Amount</th>
@@ -216,6 +266,7 @@ export default async function TransactionsPage({
                   {tx.categories?.group_name ?? "Uncategorised"}
                   {tx.subcategories?.name ? ` / ${tx.subcategories.name}` : ""}
                 </td>
+                <td className="p-3 whitespace-nowrap">{tx.payment_mode ?? "-"}</td>
                 <td className="p-3 capitalize">{tx.personal_or_office}</td>
                 <td className="p-3">
                   <span className={`inline-flex rounded-full px-2 py-1 font-bold ${STATUS_PILL[tx.status] ?? ""}`}>

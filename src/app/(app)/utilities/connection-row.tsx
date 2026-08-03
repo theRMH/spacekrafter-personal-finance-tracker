@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatInr, formatDate } from "@/lib/format";
 import { commitmentDisplayStatus, STATUS_STYLE } from "@/lib/commitments";
-import { markCommitmentPaid } from "../insurance/actions";
+import { markCommitmentPaid, deleteCommitment } from "../insurance/actions";
 import { updateUtilityConnection } from "./actions";
 
 const UTILITY_TYPES = ["Electricity", "Gas/LPG", "Water", "Internet", "Mobile", "Cable/DTH", "Maintenance"];
@@ -134,6 +134,12 @@ export default function ConnectionRow({ connection, accounts }: { connection: Co
               </button>
             </form>
           )}
+          <form action={deleteCommitment}>
+            <input type="hidden" name="id" value={connection.id} />
+            <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">
+              Delete
+            </button>
+          </form>
         </div>
       </td>
     </tr>

@@ -96,9 +96,21 @@ export default async function ReportsPage({
           <h1 className="text-2xl font-bold text-navy">Reports and Insights</h1>
           <p className="text-sm text-muted mt-1">Spend, income, accounts, commitments and investments</p>
         </div>
-        <a href="/api/export/transactions" className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy">
-          Export transactions (CSV)
-        </a>
+        <div className="flex gap-2.5">
+          <a
+            href={`/api/export/transactions?${new URLSearchParams({ ...(fromDate ? { from: fromDate } : {}), ...(toDate ? { to: toDate } : {}), ...(usageFilter ? { usage: usageFilter } : {}) }).toString()}`}
+            className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy"
+          >
+            Export transactions (CSV)
+          </a>
+          <a
+            href={`/reports/print?${new URLSearchParams({ ...(fromDate ? { from: fromDate } : {}), ...(toDate ? { to: toDate } : {}), ...(usageFilter ? { usage: usageFilter } : {}) }).toString()}`}
+            target="_blank"
+            className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy"
+          >
+            Download PDF
+          </a>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4 flex-wrap">
@@ -173,27 +185,42 @@ function OverviewTab({ tx, prevTx, hasRange }: { tx: any[]; prevTx: any[]; hasRa
     return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs previous period`;
   }
 
+  const netCashFlow = income - expense;
   const cards = [
     { label: "Total income", value: income, delta: delta(income, prevIncome) },
     { label: "Total expenses", value: expense, delta: delta(expense, prevExpense) },
-    { label: "Net cash flow", value: income - expense, delta: delta(income - expense, prevIncome - prevExpense) },
     { label: "Personal spend", value: personalSpend, delta: delta(personalSpend, prevPersonalSpend) },
     { label: "Office spend", value: officeSpend, delta: delta(officeSpend, prevOfficeSpend) },
   ];
 
+  function deltaPill(d: string | null) {
+    if (!d) return null;
+    const positive = d.startsWith("+") || d === "New";
+    const negative = d.startsWith("-");
+    return (
+      <span className={`inline-block mt-2.5 text-[10px] font-bold rounded-full px-2 py-0.5 ${positive ? "bg-[#e8f5ef] text-success" : negative ? "bg-[#fdeaea] text-[#b64b52]" : "bg-[#f2f2f0] text-muted"}`}>
+        {d}
+      </span>
+    );
+  }
+
   return (
-    <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
-      {cards.map((c) => (
-        <div key={c.label} className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-4">
-          <div className="text-[11px] text-muted">{c.label}</div>
-          <div className="text-lg font-extrabold text-navy mt-1">{formatInr(c.value)}</div>
-          {c.delta && (
-            <div className={`text-[10px] mt-1 font-semibold ${c.delta.startsWith("+") || c.delta === "New" ? "text-success" : c.delta.startsWith("-") ? "text-[#b64b52]" : "text-muted"}`}>
-              {c.delta}
-            </div>
-          )}
-        </div>
-      ))}
+    <div>
+      <div className={`rounded-card shadow-sm p-6 mb-4 ${netCashFlow >= 0 ? "bg-[#181E32]" : "bg-[#b64b52]"}`}>
+        <div className="text-[11px] uppercase tracking-wide text-white/70">Net cash flow</div>
+        <div className="text-[34px] font-extrabold text-white mt-2">{formatInr(netCashFlow)}</div>
+        {deltaPill(delta(netCashFlow, prevIncome - prevExpense))}
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map((c) => (
+          <div key={c.label} className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-5">
+            <div className="text-[11px] uppercase tracking-wide text-muted">{c.label}</div>
+            <div className="text-[26px] font-extrabold text-navy mt-2.5">{formatInr(c.value)}</div>
+            {deltaPill(c.delta)}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

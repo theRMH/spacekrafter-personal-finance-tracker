@@ -2,6 +2,135 @@
 
 Per-session changelog for this project. See `CLAUDE.md` for the logging format and the `⚠ DEPLOY` rule.
 
+## 2026-08-03 (data wipe for fresh client testing)
+
+### Removed all test/dummy data from the live Supabase database
+**Commit:** N/A — database operation, not a code change.
+- **Context:** ready to share the app with the client for fresh testing, so all data accumulated during this build/test session needed to go. Confirmed exact scope with the user first since this is irreversible on the live DB (not local, no undo): keep the 2 profiles (Owner + the "Test Accountant" login) and all category/subcategory/rule configuration (built this session specifically so real transactions can be categorized immediately); delete everything else, including the 3 accounts (client will re-add real ones from scratch, per explicit choice — not just their balances/transactions).
+- **Deleted (scoped to the owner, in FK-safe order):** all transactions (84), commitments and their cascaded insurance/utility/subscription/income-source detail rows (8), investments and their cascaded mutual-fund/share detail rows (1), import batches (9) and saved import column-mappings (1), accounts (3), plan/projection rows (24), approval requests (0), and audit log entries (23, since they only described actions on the now-deleted dummy rows and would be confusing noise otherwise).
+- **Kept:** both profiles (Owner + Test Accountant — client explicitly chose to keep the test accountant login rather than remove it), 20 categories / 104 subcategories, and the 4 auto-categorization keyword rules (SALARY, SWIGGY, INTEREST, MEDICAL).
+- **Verified:** re-queried every affected table directly after the wipe — all target tables (including the cascade-only detail tables, checked separately since they don't have a plain `id` column) confirmed at 0 rows; categories/subcategories/rules/profiles confirmed unchanged at their pre-wipe counts.
+
+**⚠ Nothing to deploy** — this was a data operation against the live database, not a code/migration change.
+
+## 2026-08-03 (continued, client batch — item 14: brand rename + logo, complete)
+
+### App renamed to "Space Krafters Finance Tracker"; logo wired in; nav group "Personal Finance" → "Finance" (#14)
+**Commit:** Uncommitted
+- **Changed:** `src/app/layout.tsx` — page `<title>` metadata: "Spacekrafter Personal Finance Tracker" → "Space Krafters Finance Tracker".
+- **Changed:** `src/app/login/page.tsx` (both desktop and mobile brand panels) and `src/app/(app)/app-shell.tsx` (sidebar header) — "Spacekrafter" → "Space Krafters" (client confirmed it's always two words), "Personal Finance Tracker" subtitle → "Finance Tracker".
+- **Changed:** `src/lib/nav.ts` — sidebar nav group "Personal Finance" renamed to "Finance" (per client instruction).
+- **Added:** `public/logo.png` and `src/app/icon.png` — the client's logo (512×512 navy wordmark, dropped into the project root as `spacekrafters logo.png`), copied into `public/` for the sidebar/login badges and into `src/app/icon.png` for Next.js's automatic favicon generation (zero extra code needed — App Router picks this up on its own).
+- **Changed:** the 3 "SP" gradient-badge `<div>`s (sidebar, login desktop panel, login mobile panel) replaced with plain `<img src="/logo.png">`. Used a plain `<img>` rather than `next/image` because Next's built-in image optimizer needs the `sharp` package (not installed) and returned 400s without it — not worth adding a new native dependency for a small static badge.
+- **Fixed:** `src/middleware.ts` — the auth matcher (`matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"]`) didn't exclude arbitrary public static files, so unauthenticated requests for `/logo.png` (e.g. loading the login page before signing in) were getting 307-redirected to `/login`, breaking the image. Widened the matcher to exclude common static asset extensions (png/jpg/jpeg/gif/svg/ico/webp) generally, so any future static asset works the same way without needing another middleware edit.
+- **Known tradeoff, confirmed with client:** the logo is a full wordmark, not a compact icon mark, so at the 40×40px badge size it reads as a small navy square with barely-legible text against the navy sidebar/login panel. Asked whether to add a light background chip for contrast — client said leave it as-is.
+- **Verified:** rebuilt clean; confirmed via direct requests that `/logo.png` and `/icon.png` return 200 unauthenticated while real routes (`/dashboard`, `/api/export/transactions`) still correctly 307-redirect when unauthenticated (no auth regression from the matcher change); Playwright confirmed both the login-page and sidebar `<img>` elements load successfully (`naturalWidth > 0`) with zero console errors; visually screenshotted both placements. Page `<title>`, sidebar, and login page all show "Space Krafters" / "Finance Tracker" with zero leftover "Spacekrafter" occurrences, and the nav group renders as "Finance".
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-08-03 (continued, client batch — mobile responsiveness pass)
+
+### Mobile audit across all pages touched this session, plus one pre-existing fix (#10)
+**Commit:** Uncommitted
+- **Context:** per the build order, this pass runs once after every UI item in the client batch landed (Dashboard, Plans, Reports, Transactions, exports), rather than checking mobile after each individual item.
+- **Fixed:** `src/app/(app)/settings/page.tsx` — the page's outer `<div className="grid gap-8">` had no defined grid column track, so on narrow viewports it wouldn't shrink below its widest child's intrinsic content width, pushing the whole page 14px past the viewport (a real, pre-existing bug, not something introduced this session — the Categories/Rules/Audit sections that live inside it were already there). Fixed by giving it an explicit `grid-cols-1` track (Tailwind's `minmax(0,1fr)`), which lets the column shrink correctly; also hardened the "Add rule" form's `<select>`/`<input>` elements with `w-full min-w-0` so long category names in the dropdown options can't do the same thing again.
+- **Changed:** `src/app/(app)/app-shell.tsx` — outer layout grid collapses to a single column under print (`print:block`), needed for the new `/reports/print` page (see item #4) to render full-width instead of leaving a blank reserved sidebar gutter; unrelated to on-screen mobile behavior.
+- **Verified:** rebuilt clean; ran the existing `scripts/verify-mobile.mjs` audit (extended to include `/reports/print` and `/income-sources`, which didn't exist/weren't in the list at the last pass) across all 18 app pages at a 390×844 viewport — every page now reports 0px horizontal overflow, including Settings after the fix. Confirmed the wide Plans month-by-month grid and Reports tab-pill row scroll within their own containers rather than pushing the page. Mobile nav drawer opens, shows nav links, and closes correctly after navigating. The one console warning seen (`Extra attributes from the server: style` on the login page's `<input>`) is a pre-existing, unrelated hydration warning consistent with a browser-extension-injected attribute (e.g. a password manager), not an app bug — login page wasn't touched this session.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-08-03 (continued, client batch — item 4: export CSV on more pages + PDF)
+
+### Export: CSV on Investments/Insurance/Utilities/Subscriptions/Reports, PDF for Reports (#4)
+**Commit:** Uncommitted
+- **Added:** `src/lib/csv.ts` — shared `toCsv`/`csvResponse` helpers (the CSV-escaping logic was duplicated in the one existing export route; now shared across all of them).
+- **Added:** `src/app/api/export/{investments,insurance,utilities,subscriptions}/route.ts` — one CSV export endpoint per page, each with its own relevant column set (e.g. insurance includes policy number/insured/nominee, utilities includes consumer number/billing cycle, subscriptions includes category/auto-renew — no `provider` column for subscriptions since that field isn't used there). "Export (CSV)" buttons added to the Investments/Insurance/Utilities/Subscriptions page headers, same placement/style as the existing Reports export button.
+- **Changed:** `src/app/api/export/transactions/route.ts` — now accepts optional `from`/`to`/`usage` query params so the Reports page's "Export transactions (CSV)" button downloads exactly what the currently-applied filters show, instead of always the full unfiltered table.
+- **Added:** `src/app/(app)/reports/print/page.tsx` + `print-button.tsx` — a "Download PDF" option next to the CSV export, implemented as a clean print-optimized Financial Overview page (respects the same from/to/usage filters) with a "Print / Save as PDF" button that calls `window.print()`. Chose this over adding a server-side PDF-generation library (e.g. Puppeteer/headless Chrome) since that adds significant weight/complexity to a Vercel serverless deployment for what browsers already do natively — flagging this choice explicitly in case a literal downloadable-without-a-dialog PDF is required later.
+- **Changed:** `src/app/(app)/app-shell.tsx` — sidebar and topbar get `print:hidden`, and the outer layout grid collapses to a single column under print (`print:block` on the grid container) so the print page isn't left with a blank reserved sidebar gutter. This is shared infrastructure any future printable page can reuse, not specific to Reports.
+- **Verified:** rebuilt clean; Playwright confirmed all 4 new CSV endpoints return `text/csv` with the correct headers and row counts matching direct Supabase queries (1 row each for investments/insurance/utilities/subscriptions, matching DB exactly); the transactions export correctly narrows from 84 to 25 rows when `usage=office` is applied; the Reports page's Export/PDF links correctly carry the active from/to/usage filters; and a print-media screenshot confirmed the sidebar/topbar/print-button are hidden and the report content spans full width with no leftover gutter. Zero console errors.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-08-03 (continued, client batch — item 12: Transactions scorecard + Home/Office prominence)
+
+### Transactions page: summary scorecard + prominent Home/Office filter (#12)
+**Commit:** Uncommitted
+- **Added:** `src/app/(app)/transactions/page.tsx` — a 4-card scorecard row (Income/Expense/Net "(filtered)", Transaction count) computed from whatever the current filters return, so it always reflects exactly what's in the table below it, not a separate all-time figure.
+- **Changed:** Home/Office usage filter promoted from a buried `<select>` inside the filter form to its own pill-tab row (All/Personal/Office/Shared), directly below the existing status tabs, same visual language and same "preserve every other active filter" pattern as the status tabs (`hrefForUsage`). The old dropdown is gone; a hidden input preserves `usage` when the remaining filter form (date/account/type/category/payee) is submitted.
+- **Verified:** rebuilt clean; Playwright confirmed the scorecard labels render, the old `<select name="usage">` is gone, clicking the "Office" pill navigates to `?usage=office`, every visible row is office-scoped, and the Income (filtered) card showed ₹9,68,346 — cross-checked against a direct Supabase query on `personal_or_office = 'office'` (₹9,68,346, 25 rows) — matched exactly. Zero console errors.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-08-03 (continued, client batch — item 5: Reports Financial Overview restyle)
+
+### Reports → Financial Overview: scorecard/dashboard-style restyle (#5)
+**Commit:** Uncommitted
+- **Changed:** `src/app/(app)/reports/page.tsx` (`OverviewTab`) — Net cash flow pulled out into its own full-width hero card (dark navy, or red when negative) matching the visual weight it deserves as the headline number; the remaining 4 KPIs (Total income, Total expenses, Personal spend, Office spend) restyled to match the Dashboard's own card language (uppercase tracking-wide label, large `text-[26px]` value, `rounded-card`/`shadow-sm`). Period-over-period deltas are now colored pill badges instead of plain small text. No data/query changes — same `sumBy`/`delta` computations as before, only presentation.
+- **Verified:** rebuilt clean; Playwright confirmed the hero card and all 4 cards render with correct labels, and cross-checked the July 2026 rendered values (Income ₹2,50,640 / Expense ₹31,195 / Net ₹2,19,445 / Personal ₹19,399 / Office ₹11,796) against a direct Supabase query — matched exactly. Delta pills confirmed rendering (5) once a date range is applied. Zero console errors.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-08-03 (continued, client batch — item 3: income projections prominence)
+
+### Income projections made prominent on Dashboard and Plans (#3)
+**Commit:** Uncommitted
+- **Added:** Dashboard 5th top-row card, "Expected income (all sources)" — sums `expected_amount` across every Income Sources commitment, with a sub-line showing source count and actual income received this month. Links to Income Sources. Top row grid widened (`sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5`) to fit it alongside the existing 4 cards.
+- **Changed:** `src/app/(app)/plans/page.tsx` — replaced the old single-month "Income sources" table (pick one month, one Actual column) with a month-by-month grid: one row per income source, one column per calendar month (Jan–Dec) plus a Total actual column, with its own year prev/next nav independent of the existing month nav used by the rest of the page. Actuals are real per-month sums from transactions linked to that source via Add Entry — nothing invented, since the schema only stores one `expected_amount` per source, not per-month figures. Removed the now-unused single-month `incomeSourceRows`/`actualByIncomeSource` computation.
+- **Verified:** rebuilt clean; Playwright confirmed the Dashboard card renders with the right label/value/href, cross-checked against a direct Supabase query (5 sources, ₹25,000 total — matched exactly). For the Plans grid, cross-checked the DB (0 linked transactions in 2026, matching the all-zero actuals shown), then inserted a real test transaction linked to "Kodambakkam Flat Rent" dated 2026-03-15 and confirmed it appeared in exactly the March column and the row/column totals — deleted the test transaction after. Zero console errors.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-07-22 (continued, client batch — item 6: date filters)
+
+### Date range filters on Insurance/Utilities/Subscriptions/Income Sources/Investments (#6)
+**Commit:** Uncommitted
+- **Added:** `src/components/date-range-filter.tsx` — shared GET-form From/To filter, same pattern already established on Transactions/Reports, reused across all 5 pages rather than duplicating the same ~15 lines 5 times.
+- **Changed:** Insurance/Utilities/Subscriptions/Income Sources filter by `due_date`; Investments filters by `start_date` (the natural "when this happened" field there — Investments also gained a visible **Start date** column, since filtering by a field the table didn't show at all would be confusing) and correctly preserves the existing `?type=` tab selection through apply/clear.
+- **Verified:** rebuilt clean; Playwright confirmed the filter bar and "Clear filters" link render on all 5 pages, an impossible date range (Income Sources: 5 → 1 rows) demonstrably narrows results, a realistic wide range still shows real data, and Investments' type tab survives filtering. Zero console errors.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-07-22 (continued, client batch — item 11: Settings redesign)
+
+### Settings → Categories: grouped/collapsible redesign (#11)
+**Commit:** Uncommitted
+- **Context:** the category list grew to 21 groups / ~96 subcategories this session; the old two-column layout (all category chips on the left, every subcategory flat and disconnected on the right) had become genuinely cluttered, per client feedback.
+- **Added:** `settings/categories-panel.tsx` — each category is now a collapsible card (same interaction language as the sidebar's collapsible groups); expanding one shows just its own subcategories as removable chips plus an inline add-subcategory form already scoped to that category (no more picking from a giant flat dropdown). A search box filters by category or subcategory name and auto-expands matches. All collapsed by default, so the page loads uncluttered.
+- **Changed:** `settings/page.tsx` — nests subcategories under their category server-side before handing off to the new panel; the separate "Categorisation rules" and "Audit history" sections are untouched.
+- **Verified:** rebuilt clean; Playwright confirmed subcategories stay hidden until their category is expanded, search correctly filters and reveals matches, and add/delete still work through the new panel (created and removed a real subcategory, confirmed each step). Zero console errors.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-07-22 (continued, client batch — item 1: delete everywhere)
+
+### Delete capability across Accounts, commitment pages, Investments, and Import (#1)
+**Commit:** Uncommitted
+- **Accounts** (`accounts/actions.ts`) — `deleteAccount`, blocked if the account has any transactions or a commitment linked to it (same guard pattern as Categories).
+- **Insurance/Utilities/Subscriptions** (`insurance/actions.ts`) — one shared `deleteCommitment` action (identical logic across all three — a commitments row + cascading detail table, blocked if any transaction is linked to it), reused by all three row components.
+- **Income Sources** (`income-sources/actions.ts`) — its own `deleteIncomeSource` (same guard, kept separate since it's a self-contained module).
+- **Investments** (`investments/actions.ts`) — `deleteInvestment`, no guard needed (nothing references an investment via foreign key; its detail tables cascade).
+- **Import batches** (`import/actions.ts`) — `deleteImportBatch`, the one genuinely complex case: rows the import *created* are deleted, but rows that were *pre-existing manual/provisional entries the import merely matched and confirmed* are reverted to provisional instead of deleted (they weren't created by this import). Any commitment the import auto-matched is reset to upcoming so it isn't left pointing at a deleted transaction; transfer-pairing is cleared on the surviving side of a pair so it isn't left dangling.
+- **Verified extensively**, including the two riskiest paths: (1) attempted to delete an account with real transactions — correctly blocked; (2) the merge-and-undo sequence — created a manual provisional entry, ran a real import that matched and confirmed it, undid that import, and confirmed directly in the database that the original entry was *reverted to provisional*, not deleted. All 5 commitment-type creates-then-deletes and the investment create-then-delete verified end to end through the real UI. Zero console errors beyond the expected guard-rejection messages (same dev-mode overlay behavior as the existing Category delete guard).
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-07-22 (continued, client batch — items 7/8/9)
+
+### Add Entry: removed Transfer and Shared options (#8, #9)
+**Commit:** Uncommitted
+- **Changed:** `add-entry/entry-form.tsx` — removed "Transfer" from the Type dropdown and "Shared" from the Personal/Office dropdown. No schema change — Import's own transfer auto-detection and any existing transfer/shared records are untouched; this only affects what's selectable on new manual entries going forward.
+- **Verified:** rebuilt clean; Playwright confirmed both dropdowns now show exactly `["Expense","Income"]` and `["Personal","Office"]`. Zero console errors.
+
+### Payment mode detection from bank statement narration (#7)
+**Commit:** Uncommitted
+- **Added:** `supabase/migrations/0012_payment_mode.sql` — `transactions.payment_mode` (free text, no CHECK constraint — detection heuristics may add new labels over time). ⚠ DEPLOY status: **already applied** to Supabase project `trwmwickjvkoexotymum` via `npm run migrate`.
+- **Added:** `src/lib/payment-mode.ts` — `detectPaymentMode()`, pattern-matches real Indian bank statement narration prefixes (UPI-, IMPS-, NEFT, POS, cheque, ATM/cash-withdrawal codes, etc.) confirmed against the real statement tested earlier this session. `PAYMENT_MODES` constant for the manual-entry dropdown.
+- **Changed:** `import/actions.ts` — every imported transaction now gets `payment_mode` auto-detected from its narration. `add-entry/actions.ts` + `entry-form.tsx` — added an optional manual Payment mode dropdown for entries with no statement narration to detect from. `transactions/page.tsx` — new "Mode" column.
+- **Verified:** unit-tested the detection function against 11 real narration patterns (11/11 correct); ran a synthetic 5-row statement through the real Import UI end-to-end — confirmed UPI/IMPS/Card/NEFT/Cash all correctly detected and stored, and the Mode column renders them on Transactions. Zero console errors. Test transactions and the import batch cleaned up afterward.
+
+**⚠ Redeploy needed:** migration already applied directly to Supabase (not part of the Vercel build); the frontend changes need the normal `git push` → Vercel redeploy.
+
 ## 2026-08-01 (continued)
 
 ### Import: category/subcategory column support in upload + sample Excel

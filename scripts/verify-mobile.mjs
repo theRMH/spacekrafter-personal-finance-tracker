@@ -4,7 +4,7 @@ const BASE = "http://localhost:3000";
 const PAGES = [
   "/dashboard", "/transactions", "/accounts", "/import", "/add-entry",
   "/insurance", "/utilities", "/subscriptions", "/investments", "/plans",
-  "/calendar", "/approvals", "/reports", "/users-access", "/settings", "/profile",
+  "/calendar", "/approvals", "/reports", "/reports/print", "/users-access", "/settings", "/profile", "/income-sources",
 ];
 
 const browser = await chromium.launch();
@@ -44,7 +44,7 @@ await mobile.screenshot({ path: "scripts/.verify-screens/mobile-drawer-open.png"
 const navVisible = await mobile.isVisible("text=Transactions");
 console.log(`\nDrawer opened, nav item visible: ${navVisible}`);
 
-await mobile.click('a:has-text("Transactions")');
+await mobile.locator('a:has-text("Transactions")').first().click();
 await mobile.waitForURL("**/transactions");
 await mobile.waitForTimeout(300);
 const drawerClosedAfterNav = !(await mobile.isVisible('div[aria-hidden="true"]'));

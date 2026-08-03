@@ -39,12 +39,10 @@ export default function LoginPage() {
         <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-info/20 blur-3xl" />
         <div className="absolute -left-16 bottom-0 w-64 h-64 rounded-full bg-success/10 blur-3xl" />
         <div className="flex items-center gap-3 relative">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-info to-success grid place-items-center font-bold">
-            SP
-          </div>
+          <img src="/logo.png" alt="Space Krafters" className="w-10 h-10 rounded-xl object-cover" />
           <div>
-            <strong className="block">Spacekrafter</strong>
-            <span className="text-xs text-white/60">Personal Finance Tracker</span>
+            <strong className="block">Space Krafters</strong>
+            <span className="text-xs text-white/60">Finance Tracker</span>
           </div>
         </div>
         <div className="relative">
@@ -61,12 +59,10 @@ export default function LoginPage() {
 
       <div className="grid place-items-center p-6 sm:p-10">
         <div className="flex md:hidden items-center gap-3 mb-6 w-full max-w-md">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-info to-navy grid place-items-center font-bold text-white">
-            SP
-          </div>
+          <img src="/logo.png" alt="Space Krafters" className="w-10 h-10 rounded-xl object-cover" />
           <div>
-            <strong className="block text-navy">Spacekrafter</strong>
-            <span className="text-xs text-muted">Personal Finance Tracker</span>
+            <strong className="block text-navy">Space Krafters</strong>
+            <span className="text-xs text-muted">Finance Tracker</span>
           </div>
         </div>
 

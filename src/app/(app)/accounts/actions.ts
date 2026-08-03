@@ -34,3 +34,26 @@ export async function createAccount(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/add-entry");
 }
+
+export async function deleteAccount(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const id = String(formData.get("id"));
+
+  const { count: txCount } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("account_id", id);
+  if ((txCount || 0) > 0) throw new Error("Account has transactions and cannot be deleted");
+
+  const { count: commitmentCount } = await supabase.from("commitments").select("id", { count: "exact", head: true }).eq("linked_account_id", id);
+  if ((commitmentCount || 0) > 0) throw new Error("Account is linked to a commitment and cannot be deleted");
+
+  const { error } = await supabase.from("accounts").delete().eq("id", id).eq("owner_id", user.id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/accounts");
+  revalidatePath("/dashboard");
+  revalidatePath("/add-entry");
+}

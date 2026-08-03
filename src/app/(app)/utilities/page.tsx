@@ -1,22 +1,37 @@
 import { createClient } from "@/lib/supabase/server";
 import AddConnectionForm from "./add-connection-form";
 import ConnectionRow from "./connection-row";
+import DateRangeFilter from "@/components/date-range-filter";
 
-export default async function UtilitiesPage() {
+export default async function UtilitiesPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const supabase = createClient();
+  const fromDate = searchParams?.from;
+  const toDate = searchParams?.to;
 
-  const { data: connections } = await supabase
+  let query = supabase
     .from("commitments")
     .select("id, name, personal_or_office, expected_amount, due_date, status, provider, utility_details(utility_type, location, consumer_number, billing_cycle)")
     .eq("commitment_type", "utility")
     .order("due_date", { ascending: true });
+  if (fromDate) query = query.gte("due_date", fromDate);
+  if (toDate) query = query.lte("due_date", toDate);
+  const { data: connections } = await query;
 
   const { data: accounts } = await supabase.from("accounts").select("id, name").order("name");
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-navy">Utilities</h1>
-      <p className="text-sm text-muted mt-1 mb-6">Electricity, gas, water, internet, mobile and locations</p>
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-1">
+        <div>
+          <h1 className="text-2xl font-bold text-navy">Utilities</h1>
+          <p className="text-sm text-muted mt-1 mb-6">Electricity, gas, water, internet, mobile and locations</p>
+        </div>
+        <a href="/api/export/utilities" className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy">
+          Export (CSV)
+        </a>
+      </div>
+
+      <DateRangeFilter from={fromDate} to={toDate} clearHref="/utilities" />
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto mb-8">
         <table className="w-full text-xs min-w-[900px]">

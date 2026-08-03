@@ -43,6 +43,7 @@ export default async function DashboardPage() {
     { count: needsReviewCount },
     { count: provisionalCount },
     { count: pendingApprovals },
+    { data: incomeSources },
   ] = await Promise.all([
     userId ? supabase.from("profiles").select("full_name").eq("id", userId).single() : Promise.resolve({ data: null }),
     supabase.from("accounts").select("id, opening_balance, active"),
@@ -63,6 +64,7 @@ export default async function DashboardPage() {
     supabase.from("transactions").select("id", { count: "exact", head: true }).eq("status", "needs_review").is("deleted_at", null),
     supabase.from("transactions").select("id", { count: "exact", head: true }).eq("status", "provisional").is("deleted_at", null),
     supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("commitments").select("id, expected_amount, status").eq("commitment_type", "expected_income"),
   ]);
 
   const firstName = (profile?.full_name || "Owner").split(" ")[0];
@@ -86,6 +88,8 @@ export default async function DashboardPage() {
   const personalExpense = thisMonthTx.filter((t) => t.type === "expense" && t.personal_or_office === "personal").reduce((s, t) => s + Number(t.amount), 0);
   const officeExpense = thisMonthTx.filter((t) => t.type === "expense" && t.personal_or_office === "office").reduce((s, t) => s + Number(t.amount), 0);
 
+  const totalExpectedIncome = (incomeSources || []).reduce((s, c) => s + Number(c.expected_amount || 0), 0);
+
   // Explicit date range everywhere a card/section is period-scoped, so it's never
   // ambiguous whether a number is lifetime, this month, or something else.
   const periodLabel = formatDateRange(monthStart, today);
@@ -96,6 +100,7 @@ export default async function DashboardPage() {
     { label: "Income this month", value: formatInr(income), sub: periodLabel, href: "/transactions" },
     { label: "Expense this month", value: formatInr(expense), sub: expense > 0 ? `${periodLabel} · Personal ${Math.round((personalExpense / expense) * 100)}% | Office ${Math.round((officeExpense / expense) * 100)}%` : `${periodLabel} · No expenses yet`, href: "/transactions" },
     { label: "Net cash flow", value: formatInr(netCashFlow), sub: `${periodLabel} · ${netCashFlow >= 0 ? "Positive" : "Negative"}`, href: "/reports" },
+    { label: "Expected income (all sources)", value: formatInr(totalExpectedIncome), sub: `${incomeSources?.length || 0} source(s) · ${formatInr(income)} received ${periodLabel}`, href: "/income-sources" },
   ];
 
   // 6-month trend
@@ -170,7 +175,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map((c) => (
           <Link key={c.label} href={c.href} className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-5 block hover:shadow-md transition-shadow">
             <div className="text-[11px] uppercase tracking-wide text-muted">{c.label}</div>

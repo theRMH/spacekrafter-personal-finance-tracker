@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Spacekrafter Personal Finance Tracker",
+  title: "Space Krafters Finance Tracker",
   description: "Personal and business finance visibility for Owner and Accountant.",
 };
 

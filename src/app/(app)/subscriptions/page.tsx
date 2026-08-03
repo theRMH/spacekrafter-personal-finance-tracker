@@ -2,15 +2,21 @@ import { createClient } from "@/lib/supabase/server";
 import { formatInr } from "@/lib/format";
 import AddSubscriptionForm from "./add-subscription-form";
 import SubscriptionRow from "./subscription-row";
+import DateRangeFilter from "@/components/date-range-filter";
 
-export default async function SubscriptionsPage() {
+export default async function SubscriptionsPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const supabase = createClient();
+  const fromDate = searchParams?.from;
+  const toDate = searchParams?.to;
 
-  const { data: subs } = await supabase
+  let query = supabase
     .from("commitments")
     .select("id, name, personal_or_office, expected_amount, frequency, due_date, status, subscription_details(category, auto_renew)")
     .eq("commitment_type", "subscription")
     .order("due_date", { ascending: true });
+  if (fromDate) query = query.gte("due_date", fromDate);
+  if (toDate) query = query.lte("due_date", toDate);
+  const { data: subs } = await query;
 
   const { data: accounts } = await supabase.from("accounts").select("id, name").order("name");
 
@@ -23,14 +29,23 @@ export default async function SubscriptionsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-navy">Subscriptions</h1>
-      <p className="text-sm text-muted mt-1 mb-4">Personal and office recurring services</p>
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-1">
+        <div>
+          <h1 className="text-2xl font-bold text-navy">Subscriptions</h1>
+          <p className="text-sm text-muted mt-1 mb-4">Personal and office recurring services</p>
+        </div>
+        <a href="/api/export/subscriptions" className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy">
+          Export (CSV)
+        </a>
+      </div>
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-5 mb-6 max-w-xs">
         <div className="text-[11px] uppercase tracking-wide text-muted">Estimated monthly commitment</div>
         <div className="text-2xl font-extrabold text-navy mt-2">{formatInr(monthlyTotal)}</div>
         <div className="text-[11px] text-muted mt-2">Across {active.length} active subscription(s)</div>
       </div>
+
+      <DateRangeFilter from={fromDate} to={toDate} clearHref="/subscriptions" />
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto mb-8">
         <table className="w-full text-xs min-w-[900px]">

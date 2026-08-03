@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
-import { createCategory, deleteCategory, createSubcategory, deleteSubcategory, createCategoryRule, deleteCategoryRule } from "./actions";
+import { createCategoryRule, deleteCategoryRule } from "./actions";
+import CategoriesPanel from "./categories-panel";
 
 export default async function SettingsPage() {
   const supabase = createClient();
@@ -12,61 +13,23 @@ export default async function SettingsPage() {
     supabase.from("audit_log").select("id, action, entity_table, entity_id, created_at").order("created_at", { ascending: false }).limit(50),
   ]);
 
+  const categoriesWithSubs = (categories || []).map((c) => ({
+    id: c.id,
+    group_name: c.group_name,
+    subcategories: (subcategories || []).filter((s) => s.category_id === c.id).map((s) => ({ id: s.id, name: s.name })),
+  }));
+
   return (
-    <div className="grid gap-8">
+    <div className="grid grid-cols-1 gap-8">
       <div>
         <h1 className="text-2xl font-bold text-navy">Settings</h1>
         <p className="text-sm text-muted mt-1">Categories, subcategories, rules, imports and audit</p>
       </div>
 
       <section className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6">
-        <h3 className="text-sm font-bold text-navy mb-4">Categories</h3>
-        <div className="grid md:grid-cols-2 gap-6">
-          <div>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {(categories || []).map((c) => (
-                <form key={c.id} action={deleteCategory} className="flex items-center gap-1 bg-[#eef2ef] rounded-full pl-3 pr-1 py-1">
-                  <span className="text-[11px]">{c.group_name}</span>
-                  <input type="hidden" name="id" value={c.id} />
-                  <button type="submit" className="text-[#b64b52] text-[11px] px-1.5">×</button>
-                </form>
-              ))}
-            </div>
-            <form action={createCategory} className="flex flex-wrap gap-2">
-              <input name="group_name" required placeholder="New category group" className="flex-1 min-w-[140px] border border-[#e3ddd7] rounded-xl p-2 text-xs" />
-              <select name="default_personal_or_office" className="border border-[#e3ddd7] rounded-xl p-2 text-xs">
-                <option value="">Default usage</option>
-                <option value="personal">Personal</option>
-                <option value="office">Office</option>
-              </select>
-              <button type="submit" className="bg-navy text-white rounded-xl px-3 text-xs font-semibold">Add</button>
-            </form>
-          </div>
-          <div>
-            <div className="grid gap-1.5 mb-4 max-h-44 overflow-auto">
-              {(subcategories || []).map((s: any) => (
-                <div key={s.id} className="text-[11px] text-muted flex justify-between items-center gap-2 border-b border-[#edf0ee] py-1">
-                  <span>{s.name}</span>
-                  <span className="flex items-center gap-2">
-                    <span>{s.categories?.group_name}</span>
-                    <form action={deleteSubcategory}>
-                      <input type="hidden" name="id" value={s.id} />
-                      <button type="submit" className="text-[#b64b52] px-1">×</button>
-                    </form>
-                  </span>
-                </div>
-              ))}
-            </div>
-            <form action={createSubcategory} className="flex flex-wrap gap-2">
-              <select name="category_id" required className="border border-[#e3ddd7] rounded-xl p-2 text-xs max-w-full">
-                <option value="">Category…</option>
-                {(categories || []).map((c) => <option key={c.id} value={c.id}>{c.group_name}</option>)}
-              </select>
-              <input name="name" required placeholder="New subcategory" className="flex-1 min-w-[140px] border border-[#e3ddd7] rounded-xl p-2 text-xs" />
-              <button type="submit" className="bg-navy text-white rounded-xl px-3 text-xs font-semibold">Add</button>
-            </form>
-          </div>
-        </div>
+        <h3 className="text-sm font-bold text-navy mb-1">Categories</h3>
+        <p className="text-xs text-muted mb-4">Grouped by category — expand one to see and manage its subcategories.</p>
+        <CategoriesPanel categories={categoriesWithSubs} />
       </section>
 
       <section className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6">
@@ -108,16 +71,16 @@ export default async function SettingsPage() {
           </table>
         </div>
         <form action={createCategoryRule} className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-          <input name="keyword" required placeholder="Keyword e.g. SWIGGY" className="border border-[#e3ddd7] rounded-xl p-2 text-xs" />
-          <select name="category_id" required className="border border-[#e3ddd7] rounded-xl p-2 text-xs">
+          <input name="keyword" required placeholder="Keyword e.g. SWIGGY" className="w-full min-w-0 border border-[#e3ddd7] rounded-xl p-2 text-xs" />
+          <select name="category_id" required className="w-full min-w-0 border border-[#e3ddd7] rounded-xl p-2 text-xs">
             <option value="">Category…</option>
             {(categories || []).map((c) => <option key={c.id} value={c.id}>{c.group_name}</option>)}
           </select>
-          <select name="subcategory_id" className="border border-[#e3ddd7] rounded-xl p-2 text-xs">
+          <select name="subcategory_id" className="w-full min-w-0 border border-[#e3ddd7] rounded-xl p-2 text-xs">
             <option value="">Subcategory…</option>
             {(subcategories || []).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
-          <select name="personal_or_office" className="border border-[#e3ddd7] rounded-xl p-2 text-xs">
+          <select name="personal_or_office" className="w-full min-w-0 border border-[#e3ddd7] rounded-xl p-2 text-xs">
             <option value="">Usage…</option>
             <option value="personal">Personal</option>
             <option value="office">Office</option>

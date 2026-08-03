@@ -13,11 +13,12 @@ const PLAN_TYPES = [
 
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-export default async function PlansPage({ searchParams }: { searchParams: { year?: string; month?: string } }) {
+export default async function PlansPage({ searchParams }: { searchParams: { year?: string; month?: string; gridYear?: string } }) {
   const supabase = createClient();
   const now = new Date();
   const year = Number(searchParams?.year) || now.getFullYear();
   const month = Number(searchParams?.month) || now.getMonth() + 1;
+  const gridYear = Number(searchParams?.gridYear) || now.getFullYear();
 
   const { data: plans } = await supabase
     .from("plans")
@@ -31,7 +32,7 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
-  const [{ data: monthTx }, { data: categories }, { data: incomeSources }] = await Promise.all([
+  const [{ data: monthTx }, { data: categories }, { data: incomeSources }, { data: yearIncomeTx }] = await Promise.all([
     supabase
       .from("transactions")
       .select("amount, type, personal_or_office, category_id, linked_commitment_id")
@@ -45,6 +46,15 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
       .select("id, name, expected_amount, income_source_details(income_type)")
       .eq("commitment_type", "expected_income")
       .order("name"),
+    supabase
+      .from("transactions")
+      .select("amount, transaction_date, linked_commitment_id")
+      .eq("status", "confirmed")
+      .eq("type", "income")
+      .is("deleted_at", null)
+      .not("linked_commitment_id", "is", null)
+      .gte("transaction_date", `${gridYear}-01-01`)
+      .lt("transaction_date", `${gridYear + 1}-01-01`),
   ]);
 
   const tx = monthTx || [];
@@ -63,19 +73,21 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
     return { id: c.id, label: c.group_name, projected, actual, variance, variancePct };
   });
 
-  const actualByIncomeSource = new Map<string, number>();
-  for (const t of tx) {
-    if (t.type !== "income" || !t.linked_commitment_id) continue;
-    actualByIncomeSource.set(t.linked_commitment_id, (actualByIncomeSource.get(t.linked_commitment_id) || 0) + Number(t.amount));
+  // sourceId -> 12 monthly totals (index 0 = January), built from real linked transactions across the whole grid year.
+  const monthlyBySource = new Map<string, number[]>();
+  for (const t of yearIncomeTx || []) {
+    if (!t.linked_commitment_id) continue;
+    const arr = monthlyBySource.get(t.linked_commitment_id) || Array(12).fill(0);
+    const m = new Date(t.transaction_date).getMonth();
+    arr[m] += Number(t.amount);
+    monthlyBySource.set(t.linked_commitment_id, arr);
   }
-
-  const incomeSourceRows = (incomeSources || []).map((s: any) => {
-    const projected = Number(s.expected_amount || 0);
-    const actual = actualByIncomeSource.get(s.id) || 0;
-    const variance = actual - projected;
-    const variancePct = projected !== 0 ? (variance / projected) * 100 : 0;
-    return { id: s.id, label: s.name, type: s.income_source_details?.income_type, projected, actual, variance, variancePct };
+  const incomeGridRows = (incomeSources || []).map((s: any) => {
+    const monthly = monthlyBySource.get(s.id) || Array(12).fill(0);
+    return { id: s.id, label: s.name, projected: Number(s.expected_amount || 0), monthly, total: monthly.reduce((a, b) => a + b, 0) };
   });
+  const gridMonthTotals = Array(12).fill(0).map((_, m) => incomeGridRows.reduce((s, r) => s + r.monthly[m], 0));
+  const gridYearTotal = incomeGridRows.reduce((s, r) => s + r.total, 0);
 
   function actualFor(planType: string) {
     const def = PLAN_TYPES.find((p) => p.key === planType)!;
@@ -208,41 +220,59 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
         </button>
       </form>
 
-      <h3 className="text-sm font-bold text-navy mb-3">Income sources — {MONTH_NAMES[month - 1]} {year}</h3>
-      <p className="text-xs text-muted mb-3">
-        Projected comes from each source&apos;s expected amount — edit it on the{" "}
-        <Link href="/income-sources" className="text-info hover:underline">Income Sources</Link> page. Actual counts
-        transactions explicitly linked to that source via Add Entry.
-      </p>
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-3">
+        <div>
+          <h3 className="text-sm font-bold text-navy">Income sources — month by month</h3>
+          <p className="text-xs text-muted mt-1">
+            Actual received per month, from transactions linked to that source via Add Entry. Projected is each
+            source&apos;s expected amount — edit it on the <Link href="/income-sources" className="text-info hover:underline">Income Sources</Link> page.
+          </p>
+        </div>
+        <div className="flex gap-2 items-center shrink-0">
+          <Link href={`/plans?year=${year}&month=${month}&gridYear=${gridYear - 1}`} className="border border-[#e3ddd7] rounded-lg px-3 py-2 text-xs bg-white">←</Link>
+          <span className="text-sm font-bold text-navy">{gridYear}</span>
+          <Link href={`/plans?year=${year}&month=${month}&gridYear=${gridYear + 1}`} className="border border-[#e3ddd7] rounded-lg px-3 py-2 text-xs bg-white">→</Link>
+        </div>
+      </div>
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto">
-        <table className="w-full text-xs min-w-[720px]">
+        <table className="w-full text-xs min-w-[1200px]">
           <thead>
             <tr className="bg-[#faf9f7] text-muted uppercase text-[10px]">
               <th className="text-left p-3">Source</th>
-              <th className="text-left p-3">Type</th>
               <th className="text-right p-3">Projected</th>
-              <th className="text-right p-3">Actual</th>
-              <th className="text-right p-3">Variance</th>
-              <th className="text-right p-3">Variance %</th>
+              {MONTH_NAMES.map((m) => (
+                <th key={m} className="text-right p-3">{m.slice(0, 3)}</th>
+              ))}
+              <th className="text-right p-3">Total actual</th>
             </tr>
           </thead>
           <tbody>
-            {incomeSourceRows.map((s) => (
-              <tr key={s.id} className="border-t border-[#edf0ee]">
-                <td className="p-3 font-semibold">{s.label}</td>
-                <td className="p-3">{s.type ?? "-"}</td>
-                <td className="p-3 text-right">{formatInr(s.projected)}</td>
-                <td className="p-3 text-right">
-                  <Link href="/transactions" className="text-info hover:underline">{formatInr(s.actual)}</Link>
-                </td>
-                <td className={`p-3 text-right font-bold ${s.variance >= 0 ? "text-success" : "text-[#b64b52]"}`}>{formatInr(s.variance)}</td>
-                <td className={`p-3 text-right ${s.variance >= 0 ? "text-success" : "text-[#b64b52]"}`}>{s.projected ? `${s.variancePct.toFixed(0)}%` : "-"}</td>
+            {incomeGridRows.map((r) => (
+              <tr key={r.id} className="border-t border-[#edf0ee]">
+                <td className="p-3 font-semibold whitespace-nowrap">{r.label}</td>
+                <td className="p-3 text-right text-muted">{formatInr(r.projected)}</td>
+                {r.monthly.map((v, i) => (
+                  <td key={i} className="p-3 text-right">{v ? formatInr(v) : <span className="text-muted">-</span>}</td>
+                ))}
+                <td className="p-3 text-right font-bold">{formatInr(r.total)}</td>
               </tr>
             ))}
-            {incomeSourceRows.length === 0 && (
-              <tr><td colSpan={6} className="p-6 text-center text-muted">No income sources yet — add one on the Income Sources page.</td></tr>
+            {incomeGridRows.length === 0 && (
+              <tr><td colSpan={14} className="p-6 text-center text-muted">No income sources yet — add one on the Income Sources page.</td></tr>
             )}
           </tbody>
+          {incomeGridRows.length > 0 && (
+            <tfoot>
+              <tr className="border-t border-[#edf0ee] bg-[#faf9f7]">
+                <td className="p-3 font-bold">Total</td>
+                <td className="p-3 text-right text-muted font-bold">{formatInr(incomeGridRows.reduce((s, r) => s + r.projected, 0))}</td>
+                {gridMonthTotals.map((v, i) => (
+                  <td key={i} className="p-3 text-right font-bold">{v ? formatInr(v) : <span className="text-muted">-</span>}</td>
+                ))}
+                <td className="p-3 text-right font-bold">{formatInr(gridYearTotal)}</td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>

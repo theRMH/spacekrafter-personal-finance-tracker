@@ -101,6 +101,25 @@ export async function updateIncomeSource(formData: FormData) {
   revalidatePath("/plans");
 }
 
+export async function deleteIncomeSource(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const id = String(formData.get("id"));
+  const { count } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("linked_commitment_id", id);
+  if ((count || 0) > 0) throw new Error("This source has a linked transaction and cannot be deleted");
+
+  const { error } = await supabase.from("commitments").delete().eq("id", id).eq("owner_id", user.id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/income-sources");
+  revalidatePath("/calendar");
+  revalidatePath("/plans");
+}
+
 export async function markIncomeReceived(formData: FormData) {
   const supabase = createClient();
   const {

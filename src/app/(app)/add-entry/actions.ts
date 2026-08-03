@@ -24,6 +24,7 @@ export async function createTransaction(formData: FormData) {
   const reference = String(formData.get("reference") || "").trim() || null;
   const narration = String(formData.get("narration") || "").trim() || null;
   const linkedCommitmentId = String(formData.get("linked_commitment_id") || "") || null;
+  const paymentMode = String(formData.get("payment_mode") || "").trim() || null;
 
   if (!transactionDate || !amount || amount <= 0 || !type || !personalOrOffice || !accountId) {
     throw new Error("Date, amount, type, usage and account are required");
@@ -55,6 +56,7 @@ export async function createTransaction(formData: FormData) {
     status,
     source: "manual",
     linked_commitment_id: type === "income" ? linkedCommitmentId : null,
+    payment_mode: paymentMode,
   });
 
   if (error) throw new Error(error.message);

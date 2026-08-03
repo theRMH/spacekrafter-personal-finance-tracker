@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 import UploadForm from "./upload-form";
+import { deleteImportBatch } from "./actions";
 
 export default async function ImportPage() {
   const supabase = createClient();
@@ -53,6 +54,7 @@ export default async function ImportPage() {
               <th className="text-right p-3">Transfers</th>
               <th className="text-right p-3">Matched</th>
               <th className="text-right p-3">Needs review</th>
+              <th className="text-left p-3">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -67,10 +69,16 @@ export default async function ImportPage() {
                 <td className="p-3 text-right">{b.transfers}</td>
                 <td className="p-3 text-right">{b.matched}</td>
                 <td className="p-3 text-right">{b.unknown}</td>
+                <td className="p-3">
+                  <form action={deleteImportBatch}>
+                    <input type="hidden" name="id" value={b.id} />
+                    <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">Undo import</button>
+                  </form>
+                </td>
               </tr>
             ))}
             {(!batches || batches.length === 0) && (
-              <tr><td colSpan={9} className="p-6 text-center text-muted">No imports yet.</td></tr>
+              <tr><td colSpan={10} className="p-6 text-center text-muted">No imports yet.</td></tr>
             )}
           </tbody>
         </table>

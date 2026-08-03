@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatInr, formatDate } from "@/lib/format";
 import { commitmentDisplayStatus, STATUS_STYLE, FREQUENCIES } from "@/lib/commitments";
-import { markCommitmentPaid, updateInsurancePolicy } from "./actions";
+import { markCommitmentPaid, updateInsurancePolicy, deleteCommitment } from "./actions";
 
 const INSURANCE_TYPES = ["Health", "Life", "Term", "Bike", "Car", "Property", "Business", "Personal Accident", "ULIP/Endowment"];
 
@@ -133,6 +133,12 @@ export default function PolicyRow({ policy, accounts }: { policy: Policy; accoun
               </button>
             </form>
           )}
+          <form action={deleteCommitment}>
+            <input type="hidden" name="id" value={policy.id} />
+            <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">
+              Delete
+            </button>
+          </form>
         </div>
       </td>
     </tr>

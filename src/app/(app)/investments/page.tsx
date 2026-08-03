@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatInr, formatDate } from "@/lib/format";
-import { updateCurrentValue } from "./actions";
+import { updateCurrentValue, deleteInvestment } from "./actions";
 import AddInvestmentForm from "./add-investment-form";
 import AddMutualFundForm from "./add-mutual-fund-form";
 import AddShareForm from "./add-share-form";
 import AddSimpleInvestmentForm from "./add-simple-investment-form";
+import DateRangeFilter from "@/components/date-range-filter";
 
 const SIMPLE_TYPE_META: Record<string, { label: string; placeholder: string }> = {
   fd_rd: { label: "Fixed Deposit / RD", placeholder: "HDFC FD #1" },
@@ -28,15 +29,19 @@ const SUBTABS = [
   { value: "other", label: "Other" },
 ];
 
-export default async function InvestmentsPage({ searchParams }: { searchParams: { type?: string } }) {
+export default async function InvestmentsPage({ searchParams }: { searchParams: { type?: string; from?: string; to?: string } }) {
   const supabase = createClient();
   const activeType = searchParams?.type || "";
+  const fromDate = searchParams?.from;
+  const toDate = searchParams?.to;
 
   let query = supabase
     .from("investments")
-    .select("id, investment_type, name, invested_amount, current_value, valuation_date, linked_account_id, mutual_fund_details(amc, scheme_name, category, folio_number), share_details(company_name, quantity, average_purchase_price)")
+    .select("id, investment_type, name, invested_amount, current_value, valuation_date, start_date, linked_account_id, mutual_fund_details(amc, scheme_name, category, folio_number), share_details(company_name, quantity, average_purchase_price)")
     .order("created_at", { ascending: false });
   if (activeType) query = query.eq("investment_type", activeType);
+  if (fromDate) query = query.gte("start_date", fromDate);
+  if (toDate) query = query.lte("start_date", toDate);
 
   const [{ data: investments }, { data: allInvestments }, { data: accounts }] = await Promise.all([
     query,
@@ -49,8 +54,15 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-navy">Investments</h1>
-      <p className="text-sm text-muted mt-1 mb-4">Overview, Mutual Funds, Shares and other investment types</p>
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-1">
+        <div>
+          <h1 className="text-2xl font-bold text-navy">Investments</h1>
+          <p className="text-sm text-muted mt-1 mb-4">Overview, Mutual Funds, Shares and other investment types</p>
+        </div>
+        <a href="/api/export/investments" className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy">
+          Export (CSV)
+        </a>
+      </div>
 
       <div className="flex gap-2 mb-6 flex-wrap">
         {SUBTABS.map((t) => (
@@ -63,6 +75,13 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
           </Link>
         ))}
       </div>
+
+      <DateRangeFilter
+        from={fromDate}
+        to={toDate}
+        clearHref={activeType ? `/investments?type=${activeType}` : "/investments"}
+        extraHidden={activeType ? [{ name: "type", value: activeType }] : []}
+      />
 
       {!activeType && (
         <div className="grid sm:grid-cols-3 gap-4 mb-8">
@@ -90,9 +109,11 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
               <th className="text-left p-3">Name</th>
               <th className="text-left p-3">Type</th>
               <th className="text-left p-3">Invested</th>
+              <th className="text-left p-3">Start date</th>
               <th className="text-left p-3">Current value</th>
               <th className="text-left p-3">Valuation date</th>
               <th className="text-left p-3">Update value</th>
+              <th className="text-left p-3">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -104,6 +125,7 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                 </td>
                 <td className="p-3 capitalize">{i.investment_type.replace(/_/g, " ")}</td>
                 <td className="p-3">{formatInr(i.invested_amount)}</td>
+                <td className="p-3">{i.start_date ? formatDate(i.start_date) : "-"}</td>
                 <td className="p-3">{i.current_value ? formatInr(i.current_value) : "-"}</td>
                 <td className="p-3">{i.valuation_date ? formatDate(i.valuation_date) : "-"}</td>
                 <td className="p-3">
@@ -114,10 +136,16 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
                     <button type="submit" className="bg-[#edf1f7] text-info rounded-lg px-2 text-[11px] font-semibold">Save</button>
                   </form>
                 </td>
+                <td className="p-3">
+                  <form action={deleteInvestment}>
+                    <input type="hidden" name="id" value={i.id} />
+                    <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">Delete</button>
+                  </form>
+                </td>
               </tr>
             ))}
             {(!investments || investments.length === 0) && (
-              <tr><td colSpan={6} className="p-6 text-center text-muted">No investments in this view yet.</td></tr>
+              <tr><td colSpan={8} className="p-6 text-center text-muted">No investments in this view yet.</td></tr>
             )}
           </tbody>
         </table>

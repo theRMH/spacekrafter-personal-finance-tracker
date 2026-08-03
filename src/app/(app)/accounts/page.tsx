@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAccountMovements } from "@/lib/balances";
 import { formatInr } from "@/lib/format";
 import AddAccountForm from "./add-account-form";
+import { deleteAccount } from "./actions";
 
 const ACCOUNT_TYPES = [
   { value: "bank", label: "Bank Account" },
@@ -38,7 +39,13 @@ export default async function AccountsPage() {
           const calculated = Number(acc.opening_balance) + (movementByAccount.get(acc.id) || 0);
           return (
             <div key={acc.id} className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-5">
-              <div className="text-[11px] uppercase tracking-wide text-muted">{acc.name}</div>
+              <div className="flex justify-between items-start gap-2">
+                <div className="text-[11px] uppercase tracking-wide text-muted">{acc.name}</div>
+                <form action={deleteAccount}>
+                  <input type="hidden" name="id" value={acc.id} />
+                  <button type="submit" className="text-[#b64b52] text-[11px] font-semibold shrink-0">Delete</button>
+                </form>
+              </div>
               <div className="text-2xl font-extrabold text-navy mt-2">{formatInr(calculated)}</div>
               <div className="flex gap-2 mt-3 text-[11px]">
                 <span className="rounded-full bg-[#edf1f7] text-info px-2 py-1 font-semibold">

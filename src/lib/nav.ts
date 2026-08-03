@@ -25,7 +25,7 @@ export const NAV_GROUPS: { group: string; items: { href: string; label: string; 
     ],
   },
   {
-    group: "Personal Finance",
+    group: "Finance",
     items: [
       { href: "/income-sources", label: "Income Sources", icon: "◎" },
       { href: "/insurance", label: "Insurance", icon: "◆" },

@@ -77,7 +77,7 @@ export default function AppShell({
   }, [navOpen]);
 
   return (
-    <div className="md:grid md:grid-cols-[268px_1fr] min-h-screen">
+    <div className="md:grid md:grid-cols-[268px_1fr] print:block min-h-screen">
       {navOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-30 md:hidden"
@@ -87,18 +87,16 @@ export default function AppShell({
       )}
 
       <aside
-        className={`bg-sidebar text-white p-4 overflow-auto
+        className={`print:hidden bg-sidebar text-white p-4 overflow-auto
           fixed inset-y-0 left-0 w-[268px] z-40 transition-transform duration-200
           ${navOpen ? "translate-x-0" : "-translate-x-full"}
           md:translate-x-0 md:static md:sticky md:top-0 md:h-screen md:w-auto md:z-auto`}
       >
         <div className="flex items-center gap-3 px-2 pb-5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-info to-navy grid place-items-center font-bold">
-            SP
-          </div>
+          <img src="/logo.png" alt="Space Krafters" className="w-10 h-10 rounded-xl object-cover" />
           <div>
-            <strong className="block text-sm">Spacekrafter</strong>
-            <span className="text-[11px] text-white/60">Personal Finance Tracker</span>
+            <strong className="block text-sm">Space Krafters</strong>
+            <span className="text-[11px] text-white/60">Finance Tracker</span>
           </div>
         </div>
 
@@ -197,15 +195,17 @@ export default function AppShell({
       </aside>
 
       <div className="min-w-0 flex flex-col">
-        <Topbar
-          displayName={displayName}
-          initials={initials}
-          pendingApprovals={pendingApprovals}
-          dueToday={dueToday}
-          onMenuClick={() => setNavOpen((v) => !v)}
-        />
+        <div className="print:hidden">
+          <Topbar
+            displayName={displayName}
+            initials={initials}
+            pendingApprovals={pendingApprovals}
+            dueToday={dueToday}
+            onMenuClick={() => setNavOpen((v) => !v)}
+          />
+        </div>
         <main className="flex-1 min-w-0">
-          <div className="max-w-[1400px] mx-auto p-4 sm:p-7">{children}</div>
+          <div className="max-w-[1400px] mx-auto p-4 sm:p-7 print:p-0 print:max-w-none">{children}</div>
         </main>
       </div>
     </div>
