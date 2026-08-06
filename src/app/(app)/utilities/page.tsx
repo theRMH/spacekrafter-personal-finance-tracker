@@ -16,9 +16,11 @@ export default async function UtilitiesPage({ searchParams }: { searchParams: { 
     .order("due_date", { ascending: true });
   if (fromDate) query = query.gte("due_date", fromDate);
   if (toDate) query = query.lte("due_date", toDate);
-  const { data: connections } = await query;
 
-  const { data: accounts } = await supabase.from("accounts").select("id, name").order("name");
+  const [{ data: connections }, { data: accounts }] = await Promise.all([
+    query,
+    supabase.from("accounts").select("id, name").order("name"),
+  ]);
 
   return (
     <div>

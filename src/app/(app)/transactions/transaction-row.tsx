@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatInr, formatDate } from "@/lib/format";
-import { categorizeTransaction, confirmProvisional, softDeleteTransaction, updateTransaction, undoTransactionEdit, redoTransactionEdit } from "./actions";
+import { categorizeTransaction, softDeleteTransaction, updateTransaction, undoTransactionEdit, redoTransactionEdit } from "./actions";
 import { TYPE_LABELS, isInflow, typesForUsage } from "@/lib/transaction-types";
 import { PAYMENT_MODES } from "@/lib/payment-mode";
 import { categoriesForUsage } from "@/lib/category-filter";
@@ -386,14 +386,6 @@ export default function TransactionRow({
               </select>
               <button type="submit" className="bg-navy text-white rounded-lg py-1.5 text-[11px] font-semibold">
                 Confirm
-              </button>
-            </form>
-          )}
-          {tx.status === "provisional" && (
-            <form action={confirmProvisional}>
-              <input type="hidden" name="id" value={tx.id} />
-              <button type="submit" className="bg-[#edf1f7] text-info rounded-lg px-2 py-1.5 text-[11px] font-semibold w-full">
-                Confirm now
               </button>
             </form>
           )}

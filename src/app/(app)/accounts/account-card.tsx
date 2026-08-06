@@ -77,7 +77,15 @@ export default function AccountCard({ account, calculated }: { account: Account;
           <button type="button" onClick={() => setEditing(true)} className="text-info text-[11px] font-semibold">
             Edit
           </button>
-          <form action={deleteAccount}>
+          <form
+            action={async (formData) => {
+              try {
+                await deleteAccount(formData);
+              } catch (err: any) {
+                alert(err?.message || "Could not delete account");
+              }
+            }}
+          >
             <input type="hidden" name="id" value={account.id} />
             <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">Delete</button>
           </form>

@@ -94,12 +94,9 @@ export default function AppShell({
           ${navOpen ? "translate-x-0" : "-translate-x-full"}
           md:translate-x-0 md:static md:sticky md:top-0 md:h-screen md:w-auto md:z-auto`}
       >
-        <div className="flex items-center gap-3 px-2 pb-5">
-          <img src="/logo.png" alt="Space Krafters" className="w-10 h-10 rounded-xl object-cover" />
-          <div>
-            <strong className="block text-sm">Space Krafters</strong>
-            <span className="text-[11px] text-white/60">Finance Tracker</span>
-          </div>
+        <div className="flex flex-col items-center gap-2 px-2 pb-5">
+          <img src="/logo-white.png" alt="Finance Tracker" className="w-24 h-24 object-contain" />
+          <span className="bg-white/10 text-white text-[11px] font-semibold px-3 py-1 rounded-full">Finance Tracker</span>
         </div>
 
         <nav className="mt-1">

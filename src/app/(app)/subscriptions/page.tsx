@@ -17,9 +17,11 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
     .order("due_date", { ascending: true });
   if (fromDate) query = query.gte("due_date", fromDate);
   if (toDate) query = query.lte("due_date", toDate);
-  const { data: subs } = await query;
 
-  const { data: accounts } = await supabase.from("accounts").select("id, name").order("name");
+  const [{ data: subs }, { data: accounts }] = await Promise.all([
+    query,
+    supabase.from("accounts").select("id, name").order("name"),
+  ]);
 
   const active = (subs || []).filter((s) => s.status !== "cancelled");
   const monthlyTotal = active.reduce((sum, s) => {

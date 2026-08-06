@@ -133,7 +133,15 @@ export default function PolicyRow({ policy, accounts }: { policy: Policy; accoun
               </button>
             </form>
           )}
-          <form action={deleteCommitment}>
+          <form
+            action={async (formData) => {
+              try {
+                await deleteCommitment(formData);
+              } catch (err: any) {
+                alert(err?.message || "Could not delete");
+              }
+            }}
+          >
             <input type="hidden" name="id" value={policy.id} />
             <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">
               Delete

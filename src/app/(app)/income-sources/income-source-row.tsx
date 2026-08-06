@@ -126,7 +126,15 @@ export default function IncomeSourceRow({ source, accounts }: { source: Source; 
               </button>
             </form>
           )}
-          <form action={deleteIncomeSource}>
+          <form
+            action={async (formData) => {
+              try {
+                await deleteIncomeSource(formData);
+              } catch (err: any) {
+                alert(err?.message || "Could not delete");
+              }
+            }}
+          >
             <input type="hidden" name="id" value={source.id} />
             <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">
               Delete

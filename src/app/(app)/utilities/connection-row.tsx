@@ -134,7 +134,15 @@ export default function ConnectionRow({ connection, accounts }: { connection: Co
               </button>
             </form>
           )}
-          <form action={deleteCommitment}>
+          <form
+            action={async (formData) => {
+              try {
+                await deleteCommitment(formData);
+              } catch (err: any) {
+                alert(err?.message || "Could not delete");
+              }
+            }}
+          >
             <input type="hidden" name="id" value={connection.id} />
             <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">
               Delete

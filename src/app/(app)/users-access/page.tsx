@@ -22,24 +22,27 @@ export default async function UsersAccessPage() {
     ? await supabase.from("profiles").select("id, full_name, created_at, allowed_pages").eq("managed_owner_id", effectiveOwnerId).order("created_at")
     : { data: null };
 
+  // listUsers() scans every auth user in the project, so it's fetched at
+  // most once per render and reused below — both the delegate's owner-email
+  // lookup and the accountant roster's emails need it, and calling it twice
+  // was a redundant full user-list round trip on the same page load.
+  const needsUserList = !isOwner || (accountants && accountants.length > 0);
+  const userList = needsUserList ? (await createAdminClient().auth.admin.listUsers()).data : null;
+
   // The Owner's own row, for display in the roster — self if we ARE the
   // owner, otherwise fetched separately since it's a different id than ours.
   const ownerRow = isOwner
     ? { full_name: caller?.full_name ?? "Owner", email: userEmail ?? "-" }
     : await (async () => {
         const { data } = effectiveOwnerId ? await supabase.from("profiles").select("full_name").eq("id", effectiveOwnerId).single() : { data: null };
-        const admin = createAdminClient();
-        const { data: userList } = await admin.auth.admin.listUsers();
         const email = userList?.users.find((u) => u.id === effectiveOwnerId)?.email || "-";
         return { full_name: data?.full_name ?? "Owner", email };
       })();
 
   let accountantEmails: Record<string, string> = {};
-  if (accountants && accountants.length > 0) {
-    const admin = createAdminClient();
-    const { data: userList } = await admin.auth.admin.listUsers();
+  if (accountants && accountants.length > 0 && userList) {
     accountantEmails = Object.fromEntries(
-      (userList?.users || []).filter((u) => accountants.some((a) => a.id === u.id)).map((u) => [u.id, u.email || "-"])
+      (userList.users || []).filter((u) => accountants.some((a) => a.id === u.id)).map((u) => [u.id, u.email || "-"])
     );
   }
 

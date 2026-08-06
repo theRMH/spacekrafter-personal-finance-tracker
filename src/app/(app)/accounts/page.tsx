@@ -6,12 +6,13 @@ import AccountCard from "./account-card";
 export default async function AccountsPage() {
   const supabase = createClient();
 
-  const { data: accounts } = await supabase
-    .from("accounts")
-    .select("id, name, type, personal_or_office, opening_balance, active, reconciliation_status, last_imported_at")
-    .order("created_at", { ascending: true });
-
-  const movementByAccount = await getAccountMovements(supabase);
+  const [{ data: accounts }, movementByAccount] = await Promise.all([
+    supabase
+      .from("accounts")
+      .select("id, name, type, personal_or_office, opening_balance, active, reconciliation_status, last_imported_at")
+      .order("created_at", { ascending: true }),
+    getAccountMovements(supabase),
+  ]);
 
   return (
     <div>

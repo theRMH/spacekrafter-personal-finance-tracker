@@ -2,6 +2,50 @@
 
 Per-session changelog for this project. See `CLAUDE.md` for the logging format and the `⚠ DEPLOY` rule.
 
+## 2026-08-06 (Branding: bigger logo, "Space Krafters" name dropped, Finance Tracker as a pill)
+
+### Sidebar and login screen: removed the "Space Krafters" text, logo enlarged, "Finance Tracker" now a pill below it
+**Commit:** Uncommitted
+- **Context:** client asked to drop the "Space Krafters" name, enlarge the logo, and merge it with "Finance Tracker" into one clean lockup.
+- **Found:** `public/logo.png` isn't an icon with a separate name label next to it — the entire square image **is** the "space krafters" wordmark (confirmed by opening the file directly). There's no icon-only version to fall back to, so removing the name from the *graphic itself* isn't possible without a new asset. Flagged this to the client, who chose to keep the existing logo file for now and restructure everything else around it.
+- **Changed:** `src/app/(app)/app-shell.tsx` (sidebar), `src/app/login/page.tsx` (both the desktop dark panel and the mobile-only lockup) — removed the "Space Krafters" text entirely; enlarged the logo (sidebar 40px→80px, login panel 40px→112px, login mobile 40px→80px); added "Finance Tracker" as a small rounded pill badge underneath the logo instead of stacked text beside it.
+- **Known tradeoff, flagged to the client:** since the logo image itself contains the "space krafters" text, making it bigger makes that text *more* visible than before, not less — the "remove the name" goal is only partially achieved until an icon-only logo exists.
+- **Verified:** rebuilt clean; screenshotted both the sidebar and login screen to confirm the new stacked logo+pill layout renders correctly with no leftover "Space Krafters" text labels.
+
+**⚠ Redeploy needed:** frontend-only, no migrations.
+
+## 2026-08-06 (Add Entry field order/required fields, Transactions confirm-step removed, account-delete crash fixed, performance pass)
+
+### Add Entry: usage before type, and everything through Payee/Payer is now mandatory
+**Commit:** Uncommitted
+- **Context:** client asked for Personal/Office to come before Type (since Type's options are already dynamically filtered by usage — asking the dependent field first didn't make sense), and for every field through Payee/Payer to be required so incomplete entries can't be saved.
+- **Changed:** `src/app/(app)/add-entry/entry-form.tsx` — swapped the Personal/Office and Type fields' order; added `required` to Category, Subcategory, and Payee/Payer (relabeled their empty placeholders to "Select category"/"Select subcategory" to match the existing "Select account" convention, since a required field with an "Uncategorised"/"-" default would just silently block submission with a confusing option sitting there). `src/app/(app)/add-entry/actions.ts` — added the same validation server-side (client-side `required` alone isn't a real guarantee — a direct API call or disabled JS would bypass it).
+- **Verified:** confirmed every category (21/21) already has at least one subcategory before making Subcategory required, so this can't dead-end a real user. Rebuilt clean; confirmed via the real UI that Personal/Office now renders first, and that clicking Save with required fields empty is blocked by the browser (first flagged field: Account) — real submission with everything filled still saves correctly.
+
+### Transactions: removed the "Confirm now" / provisional step for manual entries
+**Commit:** Uncommitted
+- **Context:** client questioned why manual entries to non-cash accounts went in as "Unverified" needing a separate "Confirm now" click — from their perspective an entry they just typed in is already done.
+- **Changed:** `src/app/(app)/add-entry/actions.ts` — `createTransaction` now always inserts `status: "confirmed"`, regardless of account type (previously bank/card/UPI manual entries started "provisional", cash entries "confirmed"). Removed the now-dead "Confirm now" button from `src/app/(app)/transactions/transaction-row.tsx` and the orphaned `confirmProvisional` action from `transactions/actions.ts`.
+- **Scope note:** confirmed zero existing transactions had `status = 'provisional'`, so nothing needed migrating. Left the "Unverified" filter tab and Dashboard scorecard alone (per the "never remove UI rows" rule) — they simply won't match anything new going forward. Import's own provisional-matching/merge logic (for reconciling a manual entry against a later statement import) is untouched — it just won't find matches for future manual entries since none will be provisional anymore; general duplicate detection during import already also checks `confirmed` status, so import-time duplicate protection is unaffected.
+- **Verified:** rebuilt clean; submitted a real entry via the UI and confirmed it saved with `status: "confirmed"` directly, and that no "Confirm now" button renders anywhere anymore.
+
+### Fixed: deleting an account (or 5 other entity types) with linked data crashed into a blank/404-looking page instead of showing why
+**Commit:** Uncommitted
+- **Context:** client reported a 404 error when trying to delete an account. Root cause: `deleteAccount` correctly throws `"Account has transactions and cannot be deleted"` when the account has linked data, but the Delete button was a plain `<form action={deleteAccount}>` with no client-side error handling — the thrown error propagated uncaught into Next.js's `NotFoundErrorBoundary`, rendering a blank page with no title, which is exactly what a "404" looks like to a user.
+- **Found the same unguarded pattern on 5 more Delete buttons** with real guard conditions that throw (Insurance/Utilities/Subscriptions policies, Categories, Income Sources — all block deletion when linked data exists) — same bug, same fix, applied to all of them: `src/app/(app)/accounts/account-card.tsx`, `insurance/policy-row.tsx`, `subscriptions/subscription-row.tsx`, `utilities/connection-row.tsx`, `settings/categories-panel.tsx`, `income-sources/income-source-row.tsx` — each Delete form now wraps its action in a try/catch and shows the real error via `alert()`, the same pattern already used elsewhere in the app for inline category-creation errors.
+- **Verified:** reproduced the exact crash locally first (confirmed the console showed `NotFoundErrorBoundary`), then confirmed the fix on two different entity types (Accounts, Income Sources) — both now show the friendly blocking message and the page stays completely normal afterward, no crash. A clean account with zero transactions still deletes normally as before.
+
+### Performance pass
+**Commit:** Uncommitted
+- **Context:** client reported the app feels slow overall. Audited for concrete anti-patterns rather than guessing — found several real, independently-fixable issues.
+- **Added:** `supabase/migrations/0017_performance_indexes.sql` ⚠ DEPLOY — `transactions.status`, `commitments.status`, and `audit_log.entity_table` had no index despite being filtered on nearly every Dashboard/Transactions/Reports/Calendar/Settings load; only owner_id/date/account were indexed.
+- **Changed:** `src/middleware.ts` — the accountant page-gating check (a `profiles` lookup) ran on **every single request**, including POST server actions, doubling the network round trips middleware adds to every mutation. RLS is the actual security boundary here (every accountant-scoped policy already checks `allowed_pages` itself), so this gating now only runs for GET navigations — POST requests never "land" on a page the way a navigation does, and skipping the extra round trip there is safe. Verified with a real accountant test: GET-navigation gating to an ungranted page still redirects correctly, a legitimate mutation on a granted page still works, and a direct insert attempt against an ungranted page is still rejected by RLS.
+- **Changed:** `src/app/(app)/import/upload-form.tsx` — `xlsx` and `papaparse` (large parsers) were imported at the top of this client component, shipping to the browser on every `/import` page load whether or not a file was ever selected. Switched both to dynamic `import()` inside the file-handling code, loaded only once a file is actually picked. **`/import`'s First Load JS dropped from 209 kB to 92 kB** (measured via `next build` output, before/after).
+- **Changed:** parallelized independent sequential queries with `Promise.all` on `accounts/page.tsx`, `insurance/page.tsx`, `subscriptions/page.tsx`, `utilities/page.tsx`, `income-sources/page.tsx`, and `plans/page.tsx` (each had 2 unrelated queries awaited one after another instead of concurrently). `src/app/(app)/users-access/page.tsx` was calling the admin `listUsers()` API (a full user-list scan) twice on the same render in some cases — now called at most once and reused.
+- **Verified:** rebuilt clean; re-ran the full accountant-security test suite (GET gating, RLS-backed mutation blocking, legitimate mutations) since the middleware change is security-adjacent — all passed. No behavior changes to page output, only fetch timing/bundle size.
+
+**⚠ Redeploy needed:** migration `0017_performance_indexes.sql` already applied directly to Supabase via `npm run migrate`; frontend changes need the normal `git push` → Vercel redeploy.
+
 ## 2026-08-06 (Users & Access: Remove access button for Accountants)
 
 ### Added a real "Remove access" button — fully deletes an Accountant's login, not just their page grants

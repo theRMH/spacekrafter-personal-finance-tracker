@@ -108,7 +108,15 @@ export default function CategoriesPanel({ categories }: { categories: Category[]
                     {c.code || "—"}
                   </button>
                 )}
-                <form action={deleteCategory}>
+                <form
+                  action={async (formData) => {
+                    try {
+                      await deleteCategory(formData);
+                    } catch (err: any) {
+                      alert(err?.message || "Could not delete category");
+                    }
+                  }}
+                >
                   <input type="hidden" name="id" value={c.id} />
                   <button type="submit" className="text-[#b64b52] text-[11px] font-semibold shrink-0">Delete</button>
                 </form>

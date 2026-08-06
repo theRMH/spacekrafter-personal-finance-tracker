@@ -12,9 +12,9 @@ function revalidateAll() {
   revalidatePath("/reports");
 }
 
-// Full edit for any transaction, confirmed/provisional/needs_review,
-// manual or imported — corrects details without touching status/source,
-// which stay owned by categorizeTransaction/confirmProvisional/import.
+// Full edit for any transaction, confirmed/needs_review, manual or
+// imported — corrects details without touching status/source, which stay
+// owned by categorizeTransaction/import.
 // Returns the audit_log id of this edit so the caller can offer an
 // immediate "Undo" without a second round trip to look it up.
 export async function updateTransaction(formData: FormData): Promise<{ auditId: string | null }> {
@@ -213,29 +213,6 @@ export async function categorizeTransaction(formData: FormData) {
     before,
     after: { category_id: categoryId, subcategory_id: subcategoryId, personal_or_office: personalOrOffice, status: "confirmed" },
   });
-
-  revalidateAll();
-}
-
-export async function confirmProvisional(formData: FormData) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
-
-  const id = String(formData.get("id"));
-  const { data: before } = await supabase.from("transactions").select("id, status").eq("id", id).eq("owner_id", user.id).single();
-
-  const { error } = await supabase
-    .from("transactions")
-    .update({ status: "confirmed" })
-    .eq("id", id)
-    .eq("owner_id", user.id);
-
-  if (error) throw new Error(error.message);
-
-  await logAudit(supabase, { ownerId: user.id, actorId: user.id, action: "confirm", entityTable: "transactions", entityId: id, before, after: { status: "confirmed" } });
 
   revalidateAll();
 }

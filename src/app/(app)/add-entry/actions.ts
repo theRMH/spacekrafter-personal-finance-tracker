@@ -27,23 +27,14 @@ export async function createTransaction(formData: FormData) {
   const linkedCommitmentId = String(formData.get("linked_commitment_id") || "") || null;
   const paymentMode = String(formData.get("payment_mode") || "").trim() || null;
 
-  if (!transactionDate || !amount || amount <= 0 || !type || !personalOrOffice || !accountId) {
-    throw new Error("Date, amount, type, usage and account are required");
+  if (!transactionDate || !amount || amount <= 0 || !type || !personalOrOffice || !accountId || !categoryId || !subcategoryId || !payeePayer) {
+    throw new Error("Date, amount, type, usage, account, category, subcategory and payee/payer are required");
   }
 
   if (!typesForUsage(personalOrOffice).some((t) => t.value === type)) {
     throw new Error(`"${type}" is not a valid type for ${personalOrOffice} entries`);
   }
 
-  const { data: account } = await supabase
-    .from("accounts")
-    .select("type")
-    .eq("id", accountId)
-    .single();
-
-  // ENTRY-04/05, BR-07/08: cash is final immediately; bank/card/UPI manual
-  // entries stay provisional until a later statement import matches them.
-  const status = account?.type === "cash" ? "confirmed" : "provisional";
   const ownerId = await getEffectiveOwnerId(supabase, user.id);
 
   const { error } = await supabase.from("transactions").insert({
@@ -58,7 +49,7 @@ export async function createTransaction(formData: FormData) {
     payee_payer: payeePayer,
     reference,
     narration,
-    status,
+    status: "confirmed",
     source: "manual",
     linked_commitment_id: type === "income" ? linkedCommitmentId : null,
     payment_mode: paymentMode,

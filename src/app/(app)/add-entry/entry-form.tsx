@@ -83,7 +83,7 @@ export default function EntryForm({
     <form action={createTransaction} className="grid gap-4 max-w-2xl">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs text-muted mb-1.5">Date</label>
+          <label className="block text-xs text-muted mb-1.5">Date <span className="text-red-500">*</span></label>
           <input
             name="transaction_date"
             type="date"
@@ -93,14 +93,27 @@ export default function EntryForm({
           />
         </div>
         <div>
-          <label className="block text-xs text-muted mb-1.5">Amount (₹)</label>
+          <label className="block text-xs text-muted mb-1.5">Amount (₹) <span className="text-red-500">*</span></label>
           <input name="amount" type="number" step="0.01" min="0.01" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs text-muted mb-1.5">Type</label>
+          <label className="block text-xs text-muted mb-1.5">Personal / Office <span className="text-red-500">*</span></label>
+          <select
+            name="personal_or_office"
+            required
+            value={usage}
+            onChange={(e) => changeUsage(e.target.value)}
+            className="w-full border border-[#e3ddd7] rounded-xl p-2.5"
+          >
+            <option value="personal">Personal (Home)</option>
+            <option value="office">Office</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1.5">Type <span className="text-red-500">*</span></label>
           <select
             name="type"
             required
@@ -113,23 +126,10 @@ export default function EntryForm({
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-xs text-muted mb-1.5">Personal / Office</label>
-          <select
-            name="personal_or_office"
-            required
-            value={usage}
-            onChange={(e) => changeUsage(e.target.value)}
-            className="w-full border border-[#e3ddd7] rounded-xl p-2.5"
-          >
-            <option value="personal">Personal (Home)</option>
-            <option value="office">Office</option>
-          </select>
-        </div>
       </div>
 
       <div>
-        <label className="block text-xs text-muted mb-1.5">Account</label>
+        <label className="block text-xs text-muted mb-1.5">Account <span className="text-red-500">*</span></label>
         <select name="account_id" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
           <option value="">Select account</option>
           {accounts.map((a) => (
@@ -147,7 +147,7 @@ export default function EntryForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-xs text-muted mb-1.5">Category</label>
+          <label className="block text-xs text-muted mb-1.5">Category <span className="text-red-500">*</span></label>
           {addingCategory ? (
             <div className="flex flex-col gap-1.5">
               <input
@@ -182,11 +182,12 @@ export default function EntryForm({
           ) : (
             <select
               name="category_id"
+              required
               value={categoryId}
               onChange={(e) => handleCategoryChange(e.target.value)}
               className="w-full border border-[#e3ddd7] rounded-xl p-2.5"
             >
-              <option value="">Uncategorised</option>
+              <option value="">Select category</option>
               {filteredCategories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.group_name}
@@ -197,9 +198,9 @@ export default function EntryForm({
           )}
         </div>
         <div>
-          <label className="block text-xs text-muted mb-1.5">Subcategory</label>
-          <select name="subcategory_id" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" disabled={!categoryId}>
-            <option value="">-</option>
+          <label className="block text-xs text-muted mb-1.5">Subcategory <span className="text-red-500">*</span></label>
+          <select name="subcategory_id" required disabled={!categoryId} className="w-full border border-[#e3ddd7] rounded-xl p-2.5">
+            <option value="">Select subcategory</option>
             {filteredSubcategories.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -225,8 +226,8 @@ export default function EntryForm({
       )}
 
       <div>
-        <label className="block text-xs text-muted mb-1.5">Payee / Payer</label>
-        <input name="payee_payer" className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="Swiggy, client name, etc." />
+        <label className="block text-xs text-muted mb-1.5">Payee / Payer <span className="text-red-500">*</span></label>
+        <input name="payee_payer" required className="w-full border border-[#e3ddd7] rounded-xl p-2.5" placeholder="Swiggy, client name, etc." />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -21,21 +21,15 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
   const month = Number(searchParams?.month) || now.getMonth() + 1;
   const gridYear = Number(searchParams?.gridYear) || now.getFullYear();
 
-  const { data: plans } = await supabase
-    .from("plans")
-    .select("id, plan_type, category_id, projected_amount")
-    .eq("financial_year", year)
-    .eq("month", month);
-
-  const planRowByType = Object.fromEntries((plans || []).filter((p) => p.plan_type).map((p) => [p.plan_type, p]));
-  const planRowByCategory = Object.fromEntries((plans || []).filter((p) => p.category_id).map((p) => [p.category_id as string, p]));
-  const projectedByType = Object.fromEntries(Object.entries(planRowByType).map(([k, p]: [string, any]) => [k, Number(p.projected_amount)]));
-  const projectedByCategory = Object.fromEntries(Object.entries(planRowByCategory).map(([k, p]: [string, any]) => [k, Number(p.projected_amount)]));
-
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
-  const [{ data: monthTx }, { data: categories }, { data: incomeSources }, { data: yearIncomeTx }] = await Promise.all([
+  const [{ data: plans }, { data: monthTx }, { data: categories }, { data: incomeSources }, { data: yearIncomeTx }] = await Promise.all([
+    supabase
+      .from("plans")
+      .select("id, plan_type, category_id, projected_amount")
+      .eq("financial_year", year)
+      .eq("month", month),
     supabase
       .from("transactions")
       .select("amount, type, personal_or_office, category_id, linked_commitment_id")
@@ -59,6 +53,11 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
       .gte("transaction_date", `${gridYear}-01-01`)
       .lt("transaction_date", `${gridYear + 1}-01-01`),
   ]);
+
+  const planRowByType = Object.fromEntries((plans || []).filter((p) => p.plan_type).map((p) => [p.plan_type, p]));
+  const planRowByCategory = Object.fromEntries((plans || []).filter((p) => p.category_id).map((p) => [p.category_id as string, p]));
+  const projectedByType = Object.fromEntries(Object.entries(planRowByType).map(([k, p]: [string, any]) => [k, Number(p.projected_amount)]));
+  const projectedByCategory = Object.fromEntries(Object.entries(planRowByCategory).map(([k, p]: [string, any]) => [k, Number(p.projected_amount)]));
 
   const tx = monthTx || [];
 

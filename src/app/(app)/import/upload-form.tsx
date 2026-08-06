@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
 import { previewImport, commitImport, type ImportMapping, type PreviewRow } from "./actions";
 import ReviewTable from "./review-table";
 
@@ -37,7 +35,11 @@ const FIELD_LABELS: { key: keyof ImportMapping; label: string }[] = [
 // string) keeps dates in the exact format `parseDate` in actions.ts expects
 // — leaving it to XLSX's own text formatting risks MM/DD/YYYY vs DD/MM/YYYY
 // ambiguity for any day <= 12.
-function parseExcelFile(file: File): Promise<{ fields: string[]; data: Record<string, string>[] }> {
+// xlsx is a large parser (~500KB) — loaded on demand only when a user
+// actually picks an Excel file, instead of shipping it in every /import
+// page load regardless of whether it's ever needed.
+async function parseExcelFile(file: File): Promise<{ fields: string[]; data: Record<string, string>[] }> {
+  const XLSX = await import("xlsx");
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Could not read the file."));
@@ -128,6 +130,7 @@ export default function UploadForm({ accounts, savedMappings, categories, subcat
       return;
     }
 
+    const Papa = (await import("papaparse")).default;
     Papa.parse<Record<string, string>>(file, {
       header: true,
       skipEmptyLines: true,

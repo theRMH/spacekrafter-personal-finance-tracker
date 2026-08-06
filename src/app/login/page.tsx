@@ -38,12 +38,9 @@ export default function LoginPage() {
       <div className="hidden md:flex flex-col justify-between p-14 text-white bg-gradient-to-br from-sidebar to-navy relative overflow-hidden">
         <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-info/20 blur-3xl" />
         <div className="absolute -left-16 bottom-0 w-64 h-64 rounded-full bg-success/10 blur-3xl" />
-        <div className="flex items-center gap-3 relative">
-          <img src="/logo.png" alt="Space Krafters" className="w-10 h-10 rounded-xl object-cover" />
-          <div>
-            <strong className="block">Space Krafters</strong>
-            <span className="text-xs text-white/60">Finance Tracker</span>
-          </div>
+        <div className="flex flex-col items-center gap-3 relative w-fit">
+          <img src="/logo-white.png" alt="Finance Tracker" className="w-36 h-36 object-contain" />
+          <span className="bg-white/10 text-white text-xs font-semibold px-3 py-1.5 rounded-full">Finance Tracker</span>
         </div>
         <div className="relative">
           <h1 className="text-4xl font-bold leading-tight max-w-lg">
@@ -54,16 +51,13 @@ export default function LoginPage() {
             renewals without turning it into complicated accounting software.
           </p>
         </div>
-        <small className="text-white/50 relative">Draft build against approved PRD/IA v1.1</small>
+        <div />
       </div>
 
       <div className="grid place-items-center p-6 sm:p-10">
-        <div className="flex md:hidden items-center gap-3 mb-6 w-full max-w-md">
-          <img src="/logo.png" alt="Space Krafters" className="w-10 h-10 rounded-xl object-cover" />
-          <div>
-            <strong className="block text-navy">Space Krafters</strong>
-            <span className="text-xs text-muted">Finance Tracker</span>
-          </div>
+        <div className="flex md:hidden flex-col items-center gap-2 mb-6 w-fit">
+          <img src="/logo.png" alt="Finance Tracker" className="w-16 h-16 rounded-xl object-cover" />
+          <span className="bg-[#edf1f7] text-info text-[11px] font-semibold px-3 py-1 rounded-full">Finance Tracker</span>
         </div>
 
         <form

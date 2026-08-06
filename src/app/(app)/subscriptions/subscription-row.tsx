@@ -128,7 +128,16 @@ export default function SubscriptionRow({ sub, accounts }: { sub: Subscription; 
               </button>
             </form>
           )}
-          <form action={deleteCommitment} className="inline-block">
+          <form
+            action={async (formData) => {
+              try {
+                await deleteCommitment(formData);
+              } catch (err: any) {
+                alert(err?.message || "Could not delete");
+              }
+            }}
+            className="inline-block"
+          >
             <input type="hidden" name="id" value={sub.id} />
             <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">Delete</button>
           </form>
