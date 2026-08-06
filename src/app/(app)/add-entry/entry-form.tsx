@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { createTransaction } from "./actions";
+import { createCategory } from "../settings/actions";
 import { PAYMENT_MODES } from "@/lib/payment-mode";
+import { typesForUsage } from "@/lib/transaction-types";
+import { categoriesForUsage } from "@/lib/category-filter";
 
 type Account = { id: string; name: string };
 type Category = { id: string; name: string; group_name: string; default_personal_or_office: string | null };
@@ -22,19 +25,58 @@ export default function EntryForm({
 }) {
   const [categoryId, setCategoryId] = useState("");
   const [usage, setUsage] = useState("personal");
-  const [usageTouched, setUsageTouched] = useState(false);
   const [type, setType] = useState("expense");
+  const [allCategories, setAllCategories] = useState<Category[]>(categories);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatUsage, setNewCatUsage] = useState<"personal" | "office">("personal");
+  const [newCatBusy, setNewCatBusy] = useState(false);
 
+  const filteredCategories = useMemo(() => categoriesForUsage(allCategories, usage, categoryId), [allCategories, usage, categoryId]);
   const filteredSubcategories = useMemo(
     () => subcategories.filter((s) => s.category_id === categoryId),
     [subcategories, categoryId]
   );
 
+  const availableTypes = useMemo(() => typesForUsage(usage), [usage]);
+
   function handleCategoryChange(id: string) {
+    if (id === "__new__") {
+      setAddingCategory(true);
+      setNewCatName("");
+      setNewCatUsage(usage === "office" ? "office" : "personal");
+      return;
+    }
     setCategoryId(id);
-    if (usageTouched) return;
-    const category = categories.find((c) => c.id === id);
-    if (category?.default_personal_or_office) setUsage(category.default_personal_or_office);
+  }
+
+  // Home only supports Income/Expense — switching to it while an
+  // Office-only type (e.g. Loan) is selected would submit an invalid combo.
+  function changeUsage(next: string) {
+    setUsage(next);
+    if (!typesForUsage(next).some((t) => t.value === type)) setType("expense");
+    const current = allCategories.find((c) => c.id === categoryId);
+    if (current?.default_personal_or_office && current.default_personal_or_office !== next) setCategoryId("");
+  }
+
+  async function submitNewCategory() {
+    const name = newCatName.trim();
+    if (!name) return;
+    setNewCatBusy(true);
+    try {
+      const formData = new FormData();
+      formData.set("group_name", name);
+      formData.set("default_personal_or_office", newCatUsage);
+      const created = await createCategory(formData);
+      setAllCategories((prev) => [...prev, created as Category]);
+      setCategoryId(created.id);
+      setAddingCategory(false);
+      setNewCatName("");
+    } catch (err: any) {
+      alert(err?.message || "Could not create category");
+    } finally {
+      setNewCatBusy(false);
+    }
   }
 
   return (
@@ -66,8 +108,9 @@ export default function EntryForm({
             onChange={(e) => setType(e.target.value)}
             className="w-full border border-[#e3ddd7] rounded-xl p-2.5"
           >
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
+            {availableTypes.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
+            ))}
           </select>
         </div>
         <div>
@@ -76,13 +119,10 @@ export default function EntryForm({
             name="personal_or_office"
             required
             value={usage}
-            onChange={(e) => {
-              setUsage(e.target.value);
-              setUsageTouched(true);
-            }}
+            onChange={(e) => changeUsage(e.target.value)}
             className="w-full border border-[#e3ddd7] rounded-xl p-2.5"
           >
-            <option value="personal">Personal</option>
+            <option value="personal">Personal (Home)</option>
             <option value="office">Office</option>
           </select>
         </div>
@@ -108,19 +148,53 @@ export default function EntryForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs text-muted mb-1.5">Category</label>
-          <select
-            name="category_id"
-            value={categoryId}
-            onChange={(e) => handleCategoryChange(e.target.value)}
-            className="w-full border border-[#e3ddd7] rounded-xl p-2.5"
-          >
-            <option value="">Uncategorised</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.group_name}
-              </option>
-            ))}
-          </select>
+          {addingCategory ? (
+            <div className="flex flex-col gap-1.5">
+              <input
+                autoFocus
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="New category name"
+                className="w-full border border-[#e3ddd7] rounded-xl p-2.5"
+              />
+              <div className="flex gap-1.5">
+                <select
+                  value={newCatUsage}
+                  onChange={(e) => setNewCatUsage(e.target.value as "personal" | "office")}
+                  className="border border-[#e3ddd7] rounded-xl p-2.5"
+                >
+                  <option value="personal">Home</option>
+                  <option value="office">Office</option>
+                </select>
+                <button
+                  type="button"
+                  disabled={newCatBusy || !newCatName.trim()}
+                  onClick={submitNewCategory}
+                  className="bg-navy text-white rounded-xl px-3 text-xs font-semibold disabled:opacity-50"
+                >
+                  Add
+                </button>
+                <button type="button" onClick={() => { setAddingCategory(false); setNewCatName(""); }} className="text-muted text-xs">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <select
+              name="category_id"
+              value={categoryId}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              className="w-full border border-[#e3ddd7] rounded-xl p-2.5"
+            >
+              <option value="">Uncategorised</option>
+              {filteredCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.group_name}
+                </option>
+              ))}
+              <option value="__new__">+ Add new category…</option>
+            </select>
+          )}
         </div>
         <div>
           <label className="block text-xs text-muted mb-1.5">Subcategory</label>

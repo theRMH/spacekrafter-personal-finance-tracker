@@ -1,21 +1,49 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatDate } from "@/lib/format";
+import { ENTITY_TABLE_LABELS } from "@/lib/audit-display";
 import { createCategoryRule, deleteCategoryRule } from "./actions";
 import CategoriesPanel from "./categories-panel";
+import AuditRow from "./audit-row";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: { entity?: string; action?: string; from?: string; to?: string };
+}) {
   const supabase = createClient();
+  const entityFilter = searchParams?.entity;
+  const actionFilter = searchParams?.action;
+  const fromDate = searchParams?.from;
+  const toDate = searchParams?.to;
+
+  let auditQuery = supabase
+    .from("audit_log")
+    .select("id, actor_id, action, entity_table, entity_id, before, after, created_at")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (entityFilter) auditQuery = auditQuery.eq("entity_table", entityFilter);
+  if (actionFilter) auditQuery = auditQuery.eq("action", actionFilter);
+  if (fromDate) auditQuery = auditQuery.gte("created_at", fromDate);
+  if (toDate) auditQuery = auditQuery.lte("created_at", `${toDate}T23:59:59`);
 
   const [{ data: categories }, { data: subcategories }, { data: rules }, { data: auditLog }] = await Promise.all([
-    supabase.from("categories").select("id, group_name").order("group_name"),
+    supabase.from("categories").select("id, group_name, code").order("group_name"),
     supabase.from("subcategories").select("id, name, category_id, categories(group_name)").order("name"),
     supabase.from("category_rules").select("id, keyword, personal_or_office, categories(group_name), subcategories(name)").order("priority", { ascending: false }),
-    supabase.from("audit_log").select("id, action, entity_table, entity_id, created_at").order("created_at", { ascending: false }).limit(50),
+    auditQuery,
   ]);
+
+  const actorIds = Array.from(new Set((auditLog || []).map((a) => a.actor_id)));
+  const { data: actorProfiles } = actorIds.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", actorIds)
+    : { data: [] as { id: string; full_name: string }[] };
+  const actorNameById = Object.fromEntries((actorProfiles || []).map((p) => [p.id, p.full_name]));
+
+  const auditEntries = (auditLog || []).map((a) => ({ ...a, actorName: actorNameById[a.actor_id] ?? "Unknown" }));
 
   const categoriesWithSubs = (categories || []).map((c) => ({
     id: c.id,
     group_name: c.group_name,
+    code: c.code,
     subcategories: (subcategories || []).filter((s) => s.category_id === c.id).map((s) => ({ id: s.id, name: s.name })),
   }));
 
@@ -90,26 +118,51 @@ export default async function SettingsPage() {
       </section>
 
       <section className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-6">
-        <h3 className="text-sm font-bold text-navy mb-4">Audit history</h3>
-        <div className="overflow-auto max-h-80">
+        <h3 className="text-sm font-bold text-navy mb-1">Audit history</h3>
+        <p className="text-xs text-muted mb-4">Every create, edit and delete across the app, with who did it and what changed.</p>
+
+        <form method="get" className="flex flex-wrap items-end gap-2 mb-4 bg-[#faf9f7] border border-[#e3ddd7] rounded-xl p-3">
+          <div>
+            <label className="block text-[10px] text-muted mb-1">Entity</label>
+            <select name="entity" defaultValue={entityFilter || ""} className="border border-[#e3ddd7] rounded-lg p-2 text-xs">
+              <option value="">All</option>
+              {Object.entries(ENTITY_TABLE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] text-muted mb-1">From</label>
+            <input type="date" name="from" defaultValue={fromDate} className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-muted mb-1">To</label>
+            <input type="date" name="to" defaultValue={toDate} className="border border-[#e3ddd7] rounded-lg p-2 text-xs" />
+          </div>
+          <button type="submit" className="bg-navy text-white rounded-lg px-4 py-2 text-xs font-semibold">Apply</button>
+          {(entityFilter || actionFilter || fromDate || toDate) && (
+            <a href="/settings" className="text-[11px] text-muted underline px-1">Clear filters</a>
+          )}
+        </form>
+
+        <div className="overflow-auto max-h-96">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-[#faf9f7] text-muted uppercase text-[10px]">
                 <th className="text-left p-2">When</th>
+                <th className="text-left p-2">By</th>
                 <th className="text-left p-2">Action</th>
-                <th className="text-left p-2">Table</th>
+                <th className="text-left p-2">Entity</th>
+                <th className="text-left p-2">Item</th>
+                <th className="text-left p-2"></th>
               </tr>
             </thead>
             <tbody>
-              {(auditLog || []).map((a) => (
-                <tr key={a.id} className="border-t border-[#edf0ee]">
-                  <td className="p-2">{formatDate(a.created_at)}</td>
-                  <td className="p-2">{a.action}</td>
-                  <td className="p-2">{a.entity_table}</td>
-                </tr>
+              {auditEntries.map((a) => (
+                <AuditRow key={a.id} entry={a} />
               ))}
-              {(!auditLog || auditLog.length === 0) && (
-                <tr><td colSpan={3} className="p-3 text-center text-muted">No audit events yet.</td></tr>
+              {auditEntries.length === 0 && (
+                <tr><td colSpan={6} className="p-3 text-center text-muted">No audit events match this filter.</td></tr>
               )}
             </tbody>
           </table>

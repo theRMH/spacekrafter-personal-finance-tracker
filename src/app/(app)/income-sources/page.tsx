@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import AddIncomeSourceForm from "./add-income-source-form";
 import IncomeSourceRow from "./income-source-row";
 import DateRangeFilter from "@/components/date-range-filter";
+import DownloadBar from "@/components/download-bar";
 
 export default async function IncomeSourcesPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const supabase = createClient();
@@ -21,10 +22,17 @@ export default async function IncomeSourcesPage({ searchParams }: { searchParams
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-navy">Income Sources</h1>
-      <p className="text-sm text-muted mt-1 mb-6">Named recurring income — rent, business revenue, investment payouts and more</p>
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-1">
+        <div>
+          <h1 className="text-2xl font-bold text-navy">Income Sources</h1>
+          <p className="text-sm text-muted mt-1 mb-6">Named recurring income — rent, business revenue, investment payouts and more</p>
+        </div>
+        <DownloadBar csvHref="/api/export/income-sources" />
+      </div>
 
-      <DateRangeFilter from={fromDate} to={toDate} clearHref="/income-sources" />
+      <div className="print:hidden">
+        <DateRangeFilter from={fromDate} to={toDate} clearHref="/income-sources" />
+      </div>
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto mb-8">
         <table className="w-full text-xs min-w-[900px]">

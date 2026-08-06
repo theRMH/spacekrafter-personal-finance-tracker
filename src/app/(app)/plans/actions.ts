@@ -2,6 +2,27 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
+
+// Removes a single projection row entirely (bucket-type or category-type —
+// both live in the same `plans` table, keyed by id) — distinct from typing 0,
+// which is a real asserted projection rather than "no projection set."
+export async function deletePlan(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const id = String(formData.get("id"));
+  const { data: before } = await supabase.from("plans").select("*").eq("id", id).eq("owner_id", user.id).single();
+  if (!before) throw new Error("Plan not found");
+
+  const { error } = await supabase.from("plans").delete().eq("id", id).eq("owner_id", user.id);
+  if (error) throw new Error(error.message);
+
+  await logAudit(supabase, { ownerId: user.id, actorId: user.id, action: "delete", entityTable: "plans", entityId: id, before });
+
+  revalidatePath("/plans");
+}
 
 export async function savePlans(formData: FormData) {
   const supabase = createClient();

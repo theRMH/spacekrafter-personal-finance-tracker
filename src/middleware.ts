@@ -1,6 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { ACCOUNTANT_ALLOWED_PATHS, ACCOUNTANT_DEFAULT_PATH } from "@/lib/nav";
+import { UNIVERSAL_PATHS } from "@/lib/nav";
 
 const PUBLIC_PATHS = ["/login"];
 
@@ -41,25 +41,30 @@ export async function middleware(request: NextRequest) {
   // Accountant route gating — the PRD requires this enforced server-side, not
   // just via a hidden nav menu, since a direct URL visit bypasses the UI
   // entirely. RLS is the real data boundary; this stops them landing on a
-  // page that renders nothing useful (or errors) for their role.
+  // page that renders nothing useful (or errors) for their role. Page access
+  // is Owner-controlled per accountant (profiles.allowed_pages), not fixed.
   let role: string | null = null;
+  let allowedPages: string[] = [];
   if (user) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    const { data: profile } = await supabase.from("profiles").select("role, allowed_pages").eq("id", user.id).single();
     role = profile?.role ?? null;
+    allowedPages = profile?.allowed_pages ?? [];
   }
   const isAccountant = role === "accountant";
-  const isAllowedForAccountant = isPublicPath || ACCOUNTANT_ALLOWED_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const isUniversalPath = UNIVERSAL_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const isAllowedForAccountant = isPublicPath || isUniversalPath || allowedPages.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const accountantDefaultPath = allowedPages[0] || "/profile";
 
   if (user && isAccountant && !isAllowedForAccountant) {
     if (pathname.startsWith("/api")) {
       return new NextResponse("Forbidden", { status: 403 });
     }
-    const redirectUrl = new URL(ACCOUNTANT_DEFAULT_PATH, request.url);
+    const redirectUrl = new URL(accountantDefaultPath, request.url);
     return NextResponse.redirect(redirectUrl);
   }
 
   if (user && isPublicPath) {
-    const redirectUrl = new URL(isAccountant ? ACCOUNTANT_DEFAULT_PATH : "/dashboard", request.url);
+    const redirectUrl = new URL(isAccountant ? accountantDefaultPath : "/dashboard", request.url);
     return NextResponse.redirect(redirectUrl);
   }
 

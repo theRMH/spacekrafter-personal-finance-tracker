@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import { previewImport, commitImport, type ImportMapping, type PreviewRow } from "./actions";
 import ReviewTable from "./review-table";
 
 type Account = { id: string; name: string };
 type SavedMapping = Record<string, ImportMapping>;
-type Category = { id: string; group_name: string; name: string };
+type Category = { id: string; group_name: string; name: string; default_personal_or_office: string | null };
 type Subcategory = { id: string; name: string; category_id: string };
 
 type Props = {
@@ -28,6 +29,48 @@ const FIELD_LABELS: { key: keyof ImportMapping; label: string }[] = [
   { key: "category", label: "Category column (optional)" },
   { key: "subcategory", label: "Subcategory column (optional)" },
 ];
+
+// Reads the first sheet of a real .xlsx/.xls workbook into the same shape
+// Papa.parse gives us for CSV: an array of header names and an array of
+// plain-string row objects. `cellDates: true` on read + explicit DD/MM/YYYY
+// formatting here (rather than trusting XLSX's locale-dependent formatted
+// string) keeps dates in the exact format `parseDate` in actions.ts expects
+// — leaving it to XLSX's own text formatting risks MM/DD/YYYY vs DD/MM/YYYY
+// ambiguity for any day <= 12.
+function parseExcelFile(file: File): Promise<{ fields: string[]; data: Record<string, string>[] }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the file."));
+    reader.onload = () => {
+      try {
+        const workbook = XLSX.read(reader.result, { type: "array", cellDates: true });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+        if (!grid.length) throw new Error("The first sheet is empty.");
+
+        const fields = (grid[0] as unknown[]).map((h) => String(h ?? "").trim());
+        const data = grid.slice(1).map((row) => {
+          const obj: Record<string, string> = {};
+          fields.forEach((field, i) => {
+            const cell = (row as unknown[])[i];
+            if (cell instanceof Date) {
+              const dd = String(cell.getDate()).padStart(2, "0");
+              const mm = String(cell.getMonth() + 1).padStart(2, "0");
+              obj[field] = `${dd}/${mm}/${cell.getFullYear()}`;
+            } else {
+              obj[field] = cell === undefined || cell === null ? "" : String(cell);
+            }
+          });
+          return obj;
+        });
+        resolve({ fields, data });
+      } catch (err: any) {
+        reject(new Error(err?.message || "Could not parse this Excel file."));
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
 
 function guessMapping(headers: string[]): ImportMapping {
   const find = (candidates: string[]) =>
@@ -58,13 +101,32 @@ export default function UploadForm({ accounts, savedMappings, categories, subcat
   const [previewRows, setPreviewRows] = useState<PreviewRow[] | null>(null);
   const [result, setResult] = useState<Awaited<ReturnType<typeof commitImport>> | null>(null);
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
     setPreviewRows(null);
     setResult(null);
     setError(null);
+
+    const ext = file.name.toLowerCase().split(".").pop();
+
+    if (ext === "xlsx" || ext === "xls") {
+      try {
+        const { fields, data } = await parseExcelFile(file);
+        setHeaders(fields);
+        setRows(data);
+        setMapping(savedMappings[accountId] || guessMapping(fields));
+      } catch (err: any) {
+        setError(err?.message || "Could not read this Excel file.");
+      }
+      return;
+    }
+
+    if (ext !== "csv") {
+      setError("Unsupported file type — please upload a .csv, .xlsx, or .xls file.");
+      return;
+    }
 
     Papa.parse<Record<string, string>>(file, {
       header: true,
@@ -181,7 +243,7 @@ export default function UploadForm({ accounts, savedMappings, categories, subcat
         </div>
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-xs text-muted">Statement file (CSV)</label>
+            <label className="block text-xs text-muted">Statement file (CSV or Excel)</label>
             <a
               href="/sample_statement.xlsx"
               download
@@ -190,7 +252,7 @@ export default function UploadForm({ accounts, savedMappings, categories, subcat
               ↓ Download sample Excel
             </a>
           </div>
-          <input type="file" accept=".csv" onChange={handleFile} className="w-full text-xs" />
+          <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} className="w-full text-xs" />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/auth";
+import { typesForUsage } from "@/lib/transaction-types";
 
 export async function createTransaction(formData: FormData) {
   const supabase = createClient();
@@ -28,6 +29,10 @@ export async function createTransaction(formData: FormData) {
 
   if (!transactionDate || !amount || amount <= 0 || !type || !personalOrOffice || !accountId) {
     throw new Error("Date, amount, type, usage and account are required");
+  }
+
+  if (!typesForUsage(personalOrOffice).some((t) => t.value === type)) {
+    throw new Error(`"${type}" is not a valid type for ${personalOrOffice} entries`);
   }
 
   const { data: account } = await supabase

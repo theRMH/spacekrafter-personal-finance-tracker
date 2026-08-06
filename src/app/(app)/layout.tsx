@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { count: pendingApprovals },
     { data: dueToday },
   ] = await Promise.all([
-    userId ? supabase.from("profiles").select("full_name, role").eq("id", userId).single() : Promise.resolve({ data: null }),
+    userId ? supabase.from("profiles").select("full_name, role, allowed_pages").eq("id", userId).single() : Promise.resolve({ data: null }),
     supabase.from("approval_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase
       .from("commitments")
@@ -39,6 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       displayName={displayName}
       initials={initials}
       role={role}
+      allowedPages={profile?.allowed_pages || []}
       pendingApprovals={pendingApprovals || 0}
       dueToday={dueToday || []}
       signOutAction={signOut}

@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import type { PreviewRow } from "./actions";
+import { createCategory } from "../settings/actions";
+import { categoriesForUsage } from "@/lib/category-filter";
 
-type Category = { id: string; group_name: string; name: string };
+type Category = { id: string; group_name: string; name: string; default_personal_or_office: string | null };
 type Subcategory = { id: string; name: string; category_id: string };
 
 type Props = {
@@ -36,6 +38,13 @@ function fmt(amount: number, type: string) {
 
 export default function ReviewTable({ rows, categories, subcategories, onConfirm, onBack, busy }: Props) {
   const [editableRows, setEditableRows] = useState<PreviewRow[]>(rows);
+  // Local copy so a category added inline (via "+ Add new category…") shows
+  // up immediately in every row's dropdown without leaving the review flow.
+  const [allCategories, setAllCategories] = useState<Category[]>(categories);
+  const [addingCategoryRow, setAddingCategoryRow] = useState<number | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryUsage, setNewCategoryUsage] = useState<"personal" | "office">("personal");
+  const [addingCategoryBusy, setAddingCategoryBusy] = useState(false);
 
   function update(index: number, patch: Partial<PreviewRow>) {
     setEditableRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -43,6 +52,30 @@ export default function ReviewTable({ rows, categories, subcategories, onConfirm
 
   function remove(index: number) {
     setEditableRows((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function categoriesForRow(row: PreviewRow) {
+    return categoriesForUsage(allCategories, row.personal_or_office, row.category_id);
+  }
+
+  async function submitNewCategory(rowIndex: number) {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    setAddingCategoryBusy(true);
+    try {
+      const formData = new FormData();
+      formData.set("group_name", name);
+      formData.set("default_personal_or_office", newCategoryUsage);
+      const created = await createCategory(formData);
+      setAllCategories((prev) => [...prev, created as Category].sort((a, b) => a.group_name.localeCompare(b.group_name)));
+      update(rowIndex, { category_id: created.id, subcategory_id: null, status: "confirmed" });
+      setAddingCategoryRow(null);
+      setNewCategoryName("");
+    } catch (err: any) {
+      alert(err?.message || "Could not create category");
+    } finally {
+      setAddingCategoryBusy(false);
+    }
   }
 
   const active = editableRows.filter((r) => r.status !== "duplicate");
@@ -76,9 +109,9 @@ export default function ReviewTable({ rows, categories, subcategories, onConfirm
               <th className="text-left p-3">Date</th>
               <th className="text-left p-3">Narration</th>
               <th className="text-right p-3">Amount</th>
+              <th className="text-left p-3">Personal / Office</th>
               <th className="text-left p-3">Category</th>
               <th className="text-left p-3">Subcategory</th>
-              <th className="text-left p-3">Personal / Office</th>
               <th className="text-left p-3">Status</th>
               <th className="p-3"></th>
             </tr>
@@ -99,22 +132,92 @@ export default function ReviewTable({ rows, categories, subcategories, onConfirm
                     {fmt(row.amount, row.type)}
                   </td>
 
-                  {/* Category */}
+                  {/* Personal / Office */}
                   <td className="p-3">
                     {isDupe ? (
                       <span className="text-muted">—</span>
                     ) : (
                       <select
+                        value={row.personal_or_office}
+                        onChange={(e) => {
+                          const nextUsage = e.target.value as PreviewRow["personal_or_office"];
+                          const current = allCategories.find((c) => c.id === row.category_id);
+                          // Clear a category that no longer matches — this is the exact
+                          // mismatch that made a row categorised "Home - X" still show as
+                          // Home spend on the Dashboard even after switching it to Office.
+                          const stillValid =
+                            nextUsage === "shared" || !current?.default_personal_or_office || current.default_personal_or_office === nextUsage;
+                          update(i, {
+                            personal_or_office: nextUsage,
+                            ...(stillValid ? {} : { category_id: null, subcategory_id: null }),
+                          });
+                        }}
+                        className="border border-[#e3ddd7] rounded-lg p-1.5 text-xs bg-white"
+                      >
+                        <option value="personal">Personal</option>
+                        <option value="office">Office</option>
+                      </select>
+                    )}
+                  </td>
+
+                  {/* Category */}
+                  <td className="p-3 min-w-[200px]">
+                    {isDupe ? (
+                      <span className="text-muted">—</span>
+                    ) : addingCategoryRow === i ? (
+                      <div className="flex flex-col gap-1">
+                        <input
+                          autoFocus
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          placeholder="New category name"
+                          className="border border-[#e3ddd7] rounded-lg p-1.5 text-xs bg-white w-full"
+                        />
+                        <div className="flex gap-1">
+                          <select
+                            value={newCategoryUsage}
+                            onChange={(e) => setNewCategoryUsage(e.target.value as "personal" | "office")}
+                            className="border border-[#e3ddd7] rounded-lg p-1.5 text-[11px] bg-white"
+                          >
+                            <option value="personal">Home</option>
+                            <option value="office">Office</option>
+                          </select>
+                          <button
+                            type="button"
+                            disabled={addingCategoryBusy || !newCategoryName.trim()}
+                            onClick={() => submitNewCategory(i)}
+                            className="bg-navy text-white rounded-lg px-2 text-[11px] font-semibold disabled:opacity-50"
+                          >
+                            Add
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setAddingCategoryRow(null); setNewCategoryName(""); }}
+                            className="text-muted text-[11px]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <select
                         value={row.category_id || ""}
                         onChange={(e) => {
+                          if (e.target.value === "__new__") {
+                            setAddingCategoryRow(i);
+                            setNewCategoryName("");
+                            setNewCategoryUsage(row.personal_or_office === "office" ? "office" : "personal");
+                            return;
+                          }
                           update(i, { category_id: e.target.value || null, subcategory_id: null, status: "confirmed" });
                         }}
                         className="border border-[#e3ddd7] rounded-lg p-1.5 text-xs bg-white w-full"
                       >
                         <option value="">— None —</option>
-                        {categories.map((c) => (
+                        {categoriesForRow(row).map((c) => (
                           <option key={c.id} value={c.id}>{c.group_name}</option>
                         ))}
+                        <option value="__new__">+ Add new category…</option>
                       </select>
                     )}
                   </td>
@@ -133,23 +236,6 @@ export default function ReviewTable({ rows, categories, subcategories, onConfirm
                         {subsForCategory.map((s) => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}
-                      </select>
-                    )}
-                  </td>
-
-                  {/* Personal / Office */}
-                  <td className="p-3">
-                    {isDupe ? (
-                      <span className="text-muted">—</span>
-                    ) : (
-                      <select
-                        value={row.personal_or_office}
-                        onChange={(e) => update(i, { personal_or_office: e.target.value as PreviewRow["personal_or_office"] })}
-                        className="border border-[#e3ddd7] rounded-lg p-1.5 text-xs bg-white"
-                      >
-                        <option value="personal">Personal</option>
-                        <option value="office">Office</option>
-                        <option value="shared">Shared</option>
                       </select>
                     )}
                   </td>

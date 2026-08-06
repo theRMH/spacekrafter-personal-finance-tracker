@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatInr } from "@/lib/format";
 import { savePlans, saveCategoryPlans } from "./actions";
+import ClearPlanButton from "./clear-plan-button";
 
 const PLAN_TYPES = [
   { key: "personal_income", label: "Personal Income", txType: "income", scope: "personal" },
@@ -22,12 +23,14 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
 
   const { data: plans } = await supabase
     .from("plans")
-    .select("plan_type, category_id, projected_amount")
+    .select("id, plan_type, category_id, projected_amount")
     .eq("financial_year", year)
     .eq("month", month);
 
-  const projectedByType = Object.fromEntries((plans || []).filter((p) => p.plan_type).map((p) => [p.plan_type, Number(p.projected_amount)]));
-  const projectedByCategory = Object.fromEntries((plans || []).filter((p) => p.category_id).map((p) => [p.category_id as string, Number(p.projected_amount)]));
+  const planRowByType = Object.fromEntries((plans || []).filter((p) => p.plan_type).map((p) => [p.plan_type, p]));
+  const planRowByCategory = Object.fromEntries((plans || []).filter((p) => p.category_id).map((p) => [p.category_id as string, p]));
+  const projectedByType = Object.fromEntries(Object.entries(planRowByType).map(([k, p]: [string, any]) => [k, Number(p.projected_amount)]));
+  const projectedByCategory = Object.fromEntries(Object.entries(planRowByCategory).map(([k, p]: [string, any]) => [k, Number(p.projected_amount)]));
 
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
@@ -163,7 +166,10 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
           {PLAN_TYPES.map((p) => (
             <div key={p.key}>
               <label className="block text-xs text-muted mb-1.5">{p.label} (₹)</label>
-              <input name={p.key} type="number" step="0.01" defaultValue={projectedByType[p.key] || ""} className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
+              <div className="flex items-center">
+                <input name={p.key} type="number" step="0.01" defaultValue={projectedByType[p.key] || ""} className="w-full border border-[#e3ddd7] rounded-xl p-2.5" />
+                {planRowByType[p.key]?.id && <ClearPlanButton id={planRowByType[p.key].id} />}
+              </div>
             </div>
           ))}
           <div className="col-span-2">
@@ -194,13 +200,16 @@ export default async function PlansPage({ searchParams }: { searchParams: { year
                 <tr key={c.id} className="border-t border-[#edf0ee]">
                   <td className="p-3 font-semibold">{c.label}</td>
                   <td className="p-3 text-right">
-                    <input
-                      name={`category_${c.id}`}
-                      type="number"
-                      step="0.01"
-                      defaultValue={c.projected || ""}
-                      className="w-28 border border-[#e3ddd7] rounded-lg p-1.5 text-right text-xs"
-                    />
+                    <div className="flex items-center justify-end">
+                      <input
+                        name={`category_${c.id}`}
+                        type="number"
+                        step="0.01"
+                        defaultValue={c.projected || ""}
+                        className="w-28 border border-[#e3ddd7] rounded-lg p-1.5 text-right text-xs"
+                      />
+                      {planRowByCategory[c.id]?.id && <ClearPlanButton id={planRowByCategory[c.id].id} />}
+                    </div>
                   </td>
                   <td className="p-3 text-right">
                     <Link href="/transactions" className="text-info hover:underline">{formatInr(c.actual)}</Link>

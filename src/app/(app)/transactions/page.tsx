@@ -1,35 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { formatInr, formatDate } from "@/lib/format";
-import { categorizeTransaction, confirmProvisional, softDeleteTransaction } from "./actions";
+import { formatInr } from "@/lib/format";
+import { ALL_TYPES } from "@/lib/transaction-types";
+import TransactionsTableBody from "./transactions-table-body";
+import DownloadBar from "@/components/download-bar";
 
-const TYPE_PILL: Record<string, string> = {
-  income: "bg-[#e5f4eb] text-success",
-  expense: "bg-[#fdeaea] text-[#b64b52]",
-  transfer: "bg-[#e8eff8] text-info",
-  investment: "bg-[#f3eee8] text-earth",
-};
-
-const STATUS_PILL: Record<string, string> = {
-  confirmed: "bg-[#e5f4eb] text-success",
-  provisional: "bg-[#fff0dc] text-[#a9793b]",
-  needs_review: "bg-[#fdeaea] text-[#b64b52]",
-};
-
-// "provisional" is the internal/DB status name; shown to Owners as "Unverified"
-// since that's clearer than accounting jargon.
-const STATUS_LABEL: Record<string, string> = {
-  confirmed: "Confirmed",
-  provisional: "Unverified",
-  needs_review: "Needs review",
-};
-
-const TYPE_OPTIONS = [
-  { value: "income", label: "Income" },
-  { value: "expense", label: "Expense" },
-  { value: "transfer", label: "Transfer" },
-  { value: "investment", label: "Investment" },
-];
+const TYPE_OPTIONS = ALL_TYPES;
 
 export default async function TransactionsPage({
   searchParams,
@@ -58,7 +34,7 @@ export default async function TransactionsPage({
   let query = supabase
     .from("transactions")
     .select(
-      "id, transaction_date, amount, type, personal_or_office, payee_payer, narration, status, source, account_id, payment_mode, accounts(name), categories(id, group_name), subcategories(id, name)"
+      "id, transaction_date, amount, type, personal_or_office, payee_payer, narration, reference, status, source, account_id, payment_mode, accounts(name), categories(id, group_name), subcategories(id, name)"
     )
     .is("deleted_at", null)
     .order("transaction_date", { ascending: false })
@@ -75,7 +51,7 @@ export default async function TransactionsPage({
 
   const [{ data: transactions }, { data: categories }, { data: subcategories }, { data: accounts }] = await Promise.all([
     query,
-    supabase.from("categories").select("id, group_name").order("group_name"),
+    supabase.from("categories").select("id, group_name, default_personal_or_office").order("group_name"),
     supabase.from("subcategories").select("id, name, category_id").order("name"),
     supabase.from("accounts").select("id, name").order("name"),
   ]);
@@ -142,9 +118,12 @@ export default async function TransactionsPage({
           <h1 className="text-2xl font-bold text-navy">Transactions</h1>
           <p className="text-sm text-muted mt-1">All imported, manual, pending and matched money movements</p>
         </div>
-        <Link href="/add-entry" className="bg-navy text-white font-semibold rounded-xl px-4 py-2.5 text-sm">
-          + Add transaction
-        </Link>
+        <div className="flex gap-2 items-center">
+          <DownloadBar csvHref="/api/export/transactions" />
+          <Link href="/add-entry" className="bg-navy text-white font-semibold rounded-xl px-4 py-2.5 text-sm print:hidden">
+            + Add transaction
+          </Link>
+        </div>
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -156,7 +135,7 @@ export default async function TransactionsPage({
         ))}
       </div>
 
-      <div className="flex gap-2 mb-3 flex-wrap">
+      <div className="flex gap-2 mb-3 flex-wrap print:hidden">
         {filters.map((f) => (
           <Link
             key={f.label}
@@ -172,7 +151,7 @@ export default async function TransactionsPage({
         ))}
       </div>
 
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      <div className="flex items-center gap-2 mb-4 flex-wrap print:hidden">
         <span className="text-[11px] uppercase tracking-wide text-muted mr-1">Home / Office</span>
         {usageFilters.map((u) => (
           <Link
@@ -189,7 +168,7 @@ export default async function TransactionsPage({
         ))}
       </div>
 
-      <form method="get" className="flex flex-wrap items-end gap-2 mb-4 bg-white border border-[#e3ddd7] rounded-xl p-3">
+      <form method="get" className="flex flex-wrap items-end gap-2 mb-4 bg-white border border-[#e3ddd7] rounded-xl p-3 print:hidden">
         {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
         {usageFilter && <input type="hidden" name="usage" value={usageFilter} />}
         <div>
@@ -242,103 +221,13 @@ export default async function TransactionsPage({
       </form>
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto">
-        <table className="w-full text-xs min-w-[900px]">
-          <thead>
-            <tr className="bg-[#faf9f7] text-muted uppercase text-[10px]">
-              <th className="text-left p-3">Date</th>
-              <th className="text-left p-3">Account</th>
-              <th className="text-left p-3">Payee / Payer</th>
-              <th className="text-left p-3">Category</th>
-              <th className="text-left p-3">Mode</th>
-              <th className="text-left p-3">Usage</th>
-              <th className="text-left p-3">Status</th>
-              <th className="text-right p-3">Amount</th>
-              <th className="text-left p-3">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(transactions || []).map((tx: any) => (
-              <tr key={tx.id} className="border-t border-[#edf0ee] align-top">
-                <td className="p-3 whitespace-nowrap">{formatDate(tx.transaction_date)}</td>
-                <td className="p-3 whitespace-nowrap">{tx.accounts?.name ?? "-"}</td>
-                <td className="p-3">{tx.payee_payer ?? "-"}</td>
-                <td className="p-3">
-                  {tx.categories?.group_name ?? "Uncategorised"}
-                  {tx.subcategories?.name ? ` / ${tx.subcategories.name}` : ""}
-                </td>
-                <td className="p-3 whitespace-nowrap">{tx.payment_mode ?? "-"}</td>
-                <td className="p-3 capitalize">{tx.personal_or_office}</td>
-                <td className="p-3">
-                  <span className={`inline-flex rounded-full px-2 py-1 font-bold ${STATUS_PILL[tx.status] ?? ""}`}>
-                    {STATUS_LABEL[tx.status] ?? tx.status}
-                  </span>
-                  <div className="mt-1">
-                    <span className={`inline-flex rounded-full px-2 py-1 font-bold capitalize ${TYPE_PILL[tx.type] ?? ""}`}>
-                      {tx.type}
-                    </span>
-                  </div>
-                </td>
-                <td className={`p-3 text-right font-bold whitespace-nowrap ${tx.type === "income" ? "text-success" : "text-[#b64b52]"}`}>
-                  {tx.type === "income" ? "+" : "-"}
-                  {formatInr(tx.amount)}
-                </td>
-                <td className="p-3 min-w-[220px]">
-                  {tx.status === "needs_review" && (
-                    <form action={categorizeTransaction} className="grid gap-1.5">
-                      <input type="hidden" name="id" value={tx.id} />
-                      <select name="category_id" required className="border border-[#e3ddd7] rounded-lg p-1.5 text-[11px]">
-                        <option value="">Category…</option>
-                        {(categories || []).map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.group_name}
-                          </option>
-                        ))}
-                      </select>
-                      <select name="subcategory_id" className="border border-[#e3ddd7] rounded-lg p-1.5 text-[11px]">
-                        <option value="">Subcategory…</option>
-                        {(subcategories || []).map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                      <select name="personal_or_office" defaultValue={tx.personal_or_office} className="border border-[#e3ddd7] rounded-lg p-1.5 text-[11px]">
-                        <option value="personal">Personal</option>
-                        <option value="office">Office</option>
-                        <option value="shared">Shared</option>
-                      </select>
-                      <button type="submit" className="bg-navy text-white rounded-lg py-1.5 text-[11px] font-semibold">
-                        Confirm
-                      </button>
-                    </form>
-                  )}
-                  {tx.status === "provisional" && (
-                    <form action={confirmProvisional}>
-                      <input type="hidden" name="id" value={tx.id} />
-                      <button type="submit" className="bg-[#edf1f7] text-info rounded-lg px-2 py-1.5 text-[11px] font-semibold w-full">
-                        Confirm now
-                      </button>
-                    </form>
-                  )}
-                  {tx.status === "confirmed" && (
-                    <form action={softDeleteTransaction}>
-                      <input type="hidden" name="id" value={tx.id} />
-                      <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">
-                        Delete
-                      </button>
-                    </form>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {(!transactions || transactions.length === 0) && (
-              <tr>
-                <td colSpan={8} className="p-6 text-center text-muted">
-                  No transactions match this filter.
-                </td>
-              </tr>
-            )}
-          </tbody>
+        <table className="w-full text-xs min-w-[960px]">
+          <TransactionsTableBody
+            transactions={transactions || []}
+            accounts={accounts || []}
+            categories={categories || []}
+            subcategories={subcategories || []}
+          />
         </table>
       </div>
     </div>

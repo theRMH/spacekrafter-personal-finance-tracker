@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
 
 export async function createInsurancePolicy(formData: FormData) {
   const supabase = createClient();
@@ -54,6 +55,15 @@ export async function createInsurancePolicy(formData: FormData) {
   });
   if (detailErr) throw new Error(detailErr.message);
 
+  await logAudit(supabase, {
+    ownerId: user.id,
+    actorId: user.id,
+    action: "create",
+    entityTable: "commitments",
+    entityId: commitment.id,
+    after: { ...commitment, insurance_type: insuranceType, policy_number: policyNumber },
+  });
+
   revalidatePath("/insurance");
   revalidatePath("/calendar");
 }
@@ -82,7 +92,10 @@ export async function updateInsurancePolicy(formData: FormData) {
     throw new Error("Policy name, insurance type and renewal date are required");
   }
 
-  const { error } = await supabase
+  const { data: beforeCommitment } = await supabase.from("commitments").select("*").eq("id", id).eq("owner_id", user.id).single();
+  const { data: beforeDetails } = await supabase.from("insurance_details").select("*").eq("commitment_id", id).single();
+
+  const { data: after, error } = await supabase
     .from("commitments")
     .update({
       name,
@@ -94,14 +107,28 @@ export async function updateInsurancePolicy(formData: FormData) {
       provider,
     })
     .eq("id", id)
-    .eq("owner_id", user.id);
+    .eq("owner_id", user.id)
+    .select()
+    .single();
   if (error) throw new Error(error.message);
 
-  const { error: detailErr } = await supabase
+  const { data: afterDetails, error: detailErr } = await supabase
     .from("insurance_details")
     .update({ insurance_type: insuranceType, policy_number: policyNumber, insured_person_or_asset: insuredPersonOrAsset, nominee })
-    .eq("commitment_id", id);
+    .eq("commitment_id", id)
+    .select()
+    .single();
   if (detailErr) throw new Error(detailErr.message);
+
+  await logAudit(supabase, {
+    ownerId: user.id,
+    actorId: user.id,
+    action: "update",
+    entityTable: "commitments",
+    entityId: id,
+    before: { ...beforeCommitment, ...beforeDetails },
+    after: { ...after, ...afterDetails },
+  });
 
   revalidatePath("/insurance");
   revalidatePath("/calendar");
@@ -115,12 +142,16 @@ export async function markCommitmentPaid(formData: FormData) {
   if (!user) throw new Error("Not authenticated");
 
   const id = String(formData.get("id"));
+  const { data: before } = await supabase.from("commitments").select("id, name, status").eq("id", id).eq("owner_id", user.id).single();
+
   const { error } = await supabase
     .from("commitments")
     .update({ status: "paid" })
     .eq("id", id)
     .eq("owner_id", user.id);
   if (error) throw new Error(error.message);
+
+  await logAudit(supabase, { ownerId: user.id, actorId: user.id, action: "mark_paid", entityTable: "commitments", entityId: id, before, after: { ...before, status: "paid" } });
 
   revalidatePath("/insurance");
   revalidatePath("/utilities");
@@ -141,8 +172,12 @@ export async function deleteCommitment(formData: FormData) {
   const { count } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("linked_commitment_id", id);
   if ((count || 0) > 0) throw new Error("This has a linked transaction and cannot be deleted");
 
+  const { data: before } = await supabase.from("commitments").select("*").eq("id", id).eq("owner_id", user.id).single();
+
   const { error } = await supabase.from("commitments").delete().eq("id", id).eq("owner_id", user.id);
   if (error) throw new Error(error.message);
+
+  await logAudit(supabase, { ownerId: user.id, actorId: user.id, action: "delete", entityTable: "commitments", entityId: id, before });
 
   revalidatePath("/insurance");
   revalidatePath("/utilities");

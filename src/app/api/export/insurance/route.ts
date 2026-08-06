@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { toCsv, csvResponse } from "@/lib/csv";
+import { xlsxResponse } from "@/lib/xlsx-export";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabase = createClient();
   const {
     data: { user },
@@ -30,5 +31,6 @@ export async function GET() {
     p.status,
   ]);
 
+  if (new URL(request.url).searchParams.get("format") === "xlsx") return xlsxResponse(header, rows, "insurance_export.xlsx");
   return csvResponse(toCsv(header, rows), "insurance_export.csv");
 }

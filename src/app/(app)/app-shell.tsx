@@ -12,6 +12,7 @@ export default function AppShell({
   displayName,
   initials,
   role,
+  allowedPages,
   pendingApprovals,
   dueToday,
   signOutAction,
@@ -20,6 +21,7 @@ export default function AppShell({
   displayName: string;
   initials: string;
   role: string;
+  allowedPages: string[];
   pendingApprovals: number;
   dueToday: DueTodayItem[];
   signOutAction: () => void;
@@ -29,7 +31,7 @@ export default function AppShell({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [pinnedPaths, setPinnedPaths] = useState<string[]>([]);
   const pathname = usePathname();
-  const navGroups = navForRole(role);
+  const navGroups = navForRole(role, allowedPages);
   const allItems = navGroups.flatMap((g) => g.items);
   const pinnedItems = allItems.filter((item) => pinnedPaths.includes(item.href));
 

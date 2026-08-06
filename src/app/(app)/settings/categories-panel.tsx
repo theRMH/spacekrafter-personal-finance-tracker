@@ -1,14 +1,34 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { createCategory, deleteCategory, createSubcategory, deleteSubcategory } from "./actions";
+import { createCategory, deleteCategory, createSubcategory, deleteSubcategory, updateCategoryCode } from "./actions";
 
 type Subcategory = { id: string; name: string };
-type Category = { id: string; group_name: string; subcategories: Subcategory[] };
+type Category = { id: string; group_name: string; code: string | null; subcategories: Subcategory[] };
 
 export default function CategoriesPanel({ categories }: { categories: Category[] }) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [codeValue, setCodeValue] = useState("");
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+
+  async function saveCode(id: string) {
+    setCodeBusy(true);
+    setCodeError(null);
+    try {
+      const formData = new FormData();
+      formData.set("id", id);
+      formData.set("code", codeValue);
+      await updateCategoryCode(formData);
+      setEditingCode(null);
+    } catch (err: any) {
+      setCodeError(err?.message || "Could not update code");
+    } finally {
+      setCodeBusy(false);
+    }
+  }
 
   const query = search.trim().toLowerCase();
   const filtered = useMemo(() => {
@@ -58,11 +78,44 @@ export default function CategoriesPanel({ categories }: { categories: Category[]
                   <span className="text-xs font-semibold text-navy truncate">{c.group_name}</span>
                   <span className="text-[10px] text-muted shrink-0">({c.subcategories.length})</span>
                 </button>
+                {editingCode === c.id ? (
+                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      autoFocus
+                      value={codeValue}
+                      onChange={(e) => setCodeValue(e.target.value)}
+                      className="border border-[#e3ddd7] rounded-lg p-1 text-[10px] w-20"
+                    />
+                    <button
+                      type="button"
+                      disabled={codeBusy || !codeValue.trim()}
+                      onClick={() => saveCode(c.id)}
+                      className="text-info text-[11px] font-semibold disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button type="button" onClick={() => { setEditingCode(null); setCodeError(null); }} className="text-muted text-[11px]">
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingCode(c.id); setCodeValue(c.code || ""); setCodeError(null); }}
+                    title="Click to edit code"
+                    className="shrink-0 text-[10px] font-mono bg-[#eef2ef] text-navy rounded-full px-2 py-1"
+                  >
+                    {c.code || "—"}
+                  </button>
+                )}
                 <form action={deleteCategory}>
                   <input type="hidden" name="id" value={c.id} />
                   <button type="submit" className="text-[#b64b52] text-[11px] font-semibold shrink-0">Delete</button>
                 </form>
               </div>
+              {editingCode === c.id && codeError && (
+                <p className="text-[11px] text-[#b64b52] px-3 pt-1.5">{codeError}</p>
+              )}
               {open && (
                 <div className="p-3">
                   <div className="flex flex-wrap gap-1.5 mb-3">

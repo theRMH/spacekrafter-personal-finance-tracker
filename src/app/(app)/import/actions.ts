@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEffectiveOwnerId } from "@/lib/auth";
 import { detectPaymentMode } from "@/lib/payment-mode";
+import { logAudit } from "@/lib/audit";
 
 export type ImportMapping = {
   date: string;
@@ -43,10 +44,13 @@ function parseAmount(v: string | undefined) {
 function parseDate(v: string | undefined) {
   const raw = (v || "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  const m = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  // Many real Indian bank statement exports use 2-digit years (DD/MM/YY) —
+  // treat YY < 50 as 20YY, else 19YY (standard century-pivot heuristic).
+  const m = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/);
   if (m) {
-    const [, d, mo, y] = m;
-    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    const [, d, mo, yRaw] = m;
+    const year = yRaw.length === 2 ? (Number(yRaw) < 50 ? `20${yRaw}` : `19${yRaw}`) : yRaw;
+    return `${year}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
   return "";
 }
@@ -387,12 +391,12 @@ export async function commitImport(
   await supabase.from("import_batches").update({ accepted, duplicates, transfers, matched, unknown, rejected }).eq("id", batch.id);
   await supabase.from("accounts").update({ last_imported_at: new Date().toISOString(), reconciliation_status: "in_progress" }).eq("id", accountId);
 
-  await supabase.from("audit_log").insert({
-    owner_id: ownerId,
-    actor_id: user.id,
+  await logAudit(supabase, {
+    ownerId,
+    actorId: user.id,
     action: "import_statement",
-    entity_table: "import_batches",
-    entity_id: batch.id,
+    entityTable: "import_batches",
+    entityId: batch.id,
     after: { file_name: fileName, accepted, duplicates, transfers, matched, unknown, rejected },
   });
 
@@ -422,6 +426,7 @@ export async function deleteImportBatch(formData: FormData) {
 
   const batchId = String(formData.get("id"));
 
+  const { data: before } = await supabase.from("import_batches").select("*").eq("id", batchId).eq("owner_id", user.id).single();
   const { data: txs } = await supabase.from("transactions").select("id, source").eq("import_batch_id", batchId);
   const txIds = (txs || []).map((t) => t.id);
 
@@ -442,6 +447,16 @@ export async function deleteImportBatch(formData: FormData) {
 
   const { error } = await supabase.from("import_batches").delete().eq("id", batchId).eq("owner_id", user.id);
   if (error) throw new Error(error.message);
+
+  await logAudit(supabase, {
+    ownerId: user.id,
+    actorId: user.id,
+    action: "undo_import",
+    entityTable: "import_batches",
+    entityId: batchId,
+    before,
+    after: { deleted_transactions: txIds.length },
+  });
 
   revalidatePath("/import");
   revalidatePath("/transactions");

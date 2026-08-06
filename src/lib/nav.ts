@@ -1,14 +1,15 @@
-// Accountant v1 scope: View/Add/Import only on Accounts, Import Statements,
-// Add Entry, Transactions (to see what they just added/imported) and Profile.
-// This is the single source of truth for both nav filtering (app-shell) and
-// route gating (middleware) — RLS is the real security boundary, this just
-// keeps the two UI-facing lists from drifting apart.
-export const ACCOUNTANT_ALLOWED_PATHS = ["/accounts", "/import", "/add-entry", "/transactions", "/profile"];
-export const ACCOUNTANT_DEFAULT_PATH = "/accounts";
+// Every path here is always reachable regardless of role or grants — an
+// Accountant's own Profile page, basically.
+export const UNIVERSAL_PATHS = ["/profile"];
 
-export function navForRole(role: string | null) {
+// Accountant page access is Owner-controlled per accountant (profiles.allowed_pages),
+// not a fixed list — this is the single source of truth for both nav filtering
+// (app-shell) and route gating (middleware). RLS is the real security boundary;
+// an Accountant always gets View + Add on whatever's granted here, never Edit/Delete,
+// on every page, granted or not.
+export function navForRole(role: string | null, allowedPages: string[] = []) {
   if (role !== "accountant") return NAV_GROUPS;
-  return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => ACCOUNTANT_ALLOWED_PATHS.includes(i.href)) })).filter(
+  return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => allowedPages.includes(i.href)) })).filter(
     (g) => g.items.length > 0
   );
 }
@@ -46,3 +47,7 @@ export const NAV_GROUPS: { group: string; items: { href: string; label: string; 
     ],
   },
 ];
+
+// Flat catalog of every grantable page, in the same order as the sidebar —
+// used to render the Owner's permission checklist on Users & Access.
+export const GRANTABLE_PAGES = NAV_GROUPS.flatMap((g) => g.items.map((i) => ({ href: i.href, label: i.label, group: g.group })));

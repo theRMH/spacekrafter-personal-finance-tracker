@@ -14,7 +14,7 @@ export default async function ImportPage() {
       .select("id, file_name, total_rows, accepted, duplicates, transfers, matched, unknown, rejected, created_at, accounts(name)")
       .order("created_at", { ascending: false })
       .limit(10),
-    supabase.from("categories").select("id, group_name, name").order("group_name"),
+    supabase.from("categories").select("id, group_name, name, default_personal_or_office").order("group_name"),
     supabase.from("subcategories").select("id, name, category_id").order("name"),
   ]);
 

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
 
 export async function createInvestment(formData: FormData) {
   const supabase = createClient();
@@ -44,6 +45,15 @@ export async function createInvestment(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
+  await logAudit(supabase, {
+    ownerId: user.id,
+    actorId: user.id,
+    action: "create",
+    entityTable: "investments",
+    entityId: investment.id,
+    after: investment,
+  });
+
   if (investmentType === "mutual_fund") {
     const { error: mfErr } = await supabase.from("mutual_fund_details").insert({
       investment_id: investment.id,
@@ -77,6 +87,89 @@ export async function createInvestment(formData: FormData) {
   revalidatePath("/investments");
 }
 
+export async function updateInvestment(formData: FormData) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const id = String(formData.get("id"));
+  const name = String(formData.get("name") || "").trim();
+  const investedAmount = Number(formData.get("invested_amount") || 0);
+  const currentValue = Number(formData.get("current_value") || 0) || null;
+  const valuationDate = String(formData.get("valuation_date") || "") || null;
+  const startDate = String(formData.get("start_date") || "") || null;
+  const maturityDate = String(formData.get("maturity_date") || "") || null;
+  const nominee = String(formData.get("nominee") || "").trim() || null;
+  const linkedAccountId = String(formData.get("linked_account_id") || "") || null;
+
+  if (!name) throw new Error("Name is required");
+  if (currentValue && !valuationDate) throw new Error("Valuation date is required when current value is set");
+
+  // investment_type is immutable after creation — it decides which detail
+  // table (if any) this investment has, and switching it would orphan or
+  // mismatch that row. Read it from the DB rather than trust the form.
+  const { data: existing } = await supabase.from("investments").select("*").eq("id", id).eq("owner_id", user.id).single();
+  if (!existing) throw new Error("Investment not found");
+
+  const { data: after, error } = await supabase
+    .from("investments")
+    .update({
+      name,
+      invested_amount: investedAmount,
+      current_value: currentValue,
+      valuation_date: valuationDate,
+      start_date: startDate,
+      maturity_date: maturityDate,
+      nominee,
+      linked_account_id: linkedAccountId,
+    })
+    .eq("id", id)
+    .eq("owner_id", user.id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+
+  await logAudit(supabase, { ownerId: user.id, actorId: user.id, action: "update", entityTable: "investments", entityId: id, before: existing, after });
+
+  if (existing.investment_type === "mutual_fund") {
+    const { error: mfErr } = await supabase
+      .from("mutual_fund_details")
+      .update({
+        amc: String(formData.get("amc") || "").trim() || null,
+        scheme_name: String(formData.get("scheme_name") || "").trim() || null,
+        category: String(formData.get("mf_category") || "") || null,
+        folio_number: String(formData.get("folio_number") || "").trim() || null,
+        agent_advisor: String(formData.get("agent_advisor") || "").trim() || null,
+        investment_mode: String(formData.get("investment_mode") || "") || null,
+        sip_amount: Number(formData.get("sip_amount") || 0) || null,
+        sip_frequency: String(formData.get("sip_frequency") || "").trim() || null,
+        units: Number(formData.get("units") || 0) || null,
+      })
+      .eq("investment_id", id);
+    if (mfErr) throw new Error(mfErr.message);
+  }
+
+  if (existing.investment_type === "share") {
+    const { error: shareErr } = await supabase
+      .from("share_details")
+      .update({
+        company_name: String(formData.get("company_name") || name).trim(),
+        symbol: String(formData.get("symbol") || "").trim() || null,
+        sector: String(formData.get("sector") || "").trim() || null,
+        broker: String(formData.get("broker") || "").trim() || null,
+        demat_account: String(formData.get("demat_account") || "").trim() || null,
+        quantity: Number(formData.get("quantity") || 0) || null,
+        average_purchase_price: Number(formData.get("average_purchase_price") || 0) || null,
+      })
+      .eq("investment_id", id);
+    if (shareErr) throw new Error(shareErr.message);
+  }
+
+  revalidatePath("/investments");
+}
+
 export async function deleteInvestment(formData: FormData) {
   const supabase = createClient();
   const {
@@ -85,8 +178,12 @@ export async function deleteInvestment(formData: FormData) {
   if (!user) throw new Error("Not authenticated");
 
   const id = String(formData.get("id"));
+  const { data: before } = await supabase.from("investments").select("*").eq("id", id).eq("owner_id", user.id).single();
+
   const { error } = await supabase.from("investments").delete().eq("id", id).eq("owner_id", user.id);
   if (error) throw new Error(error.message);
+
+  await logAudit(supabase, { ownerId: user.id, actorId: user.id, action: "delete", entityTable: "investments", entityId: id, before });
 
   revalidatePath("/investments");
 }
@@ -103,12 +200,24 @@ export async function updateCurrentValue(formData: FormData) {
   const valuationDate = String(formData.get("valuation_date") || "");
   if (!valuationDate) throw new Error("Valuation date is required");
 
+  const { data: before } = await supabase.from("investments").select("current_value, valuation_date").eq("id", id).eq("owner_id", user.id).single();
+
   const { error } = await supabase
     .from("investments")
     .update({ current_value: currentValue, valuation_date: valuationDate })
     .eq("id", id)
     .eq("owner_id", user.id);
   if (error) throw new Error(error.message);
+
+  await logAudit(supabase, {
+    ownerId: user.id,
+    actorId: user.id,
+    action: "update_value",
+    entityTable: "investments",
+    entityId: id,
+    before,
+    after: { current_value: currentValue, valuation_date: valuationDate },
+  });
 
   revalidatePath("/investments");
 }

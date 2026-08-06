@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { formatInr, formatDate } from "@/lib/format";
-import { updateCurrentValue, deleteInvestment } from "./actions";
+import { formatInr } from "@/lib/format";
 import AddInvestmentForm from "./add-investment-form";
 import AddMutualFundForm from "./add-mutual-fund-form";
 import AddShareForm from "./add-share-form";
 import AddSimpleInvestmentForm from "./add-simple-investment-form";
+import InvestmentRow from "./investment-row";
 import DateRangeFilter from "@/components/date-range-filter";
+import DownloadBar from "@/components/download-bar";
 
 const SIMPLE_TYPE_META: Record<string, { label: string; placeholder: string }> = {
   fd_rd: { label: "Fixed Deposit / RD", placeholder: "HDFC FD #1" },
@@ -37,7 +38,11 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
 
   let query = supabase
     .from("investments")
-    .select("id, investment_type, name, invested_amount, current_value, valuation_date, start_date, linked_account_id, mutual_fund_details(amc, scheme_name, category, folio_number), share_details(company_name, quantity, average_purchase_price)")
+    .select(
+      "id, investment_type, name, invested_amount, current_value, valuation_date, start_date, maturity_date, nominee, linked_account_id, " +
+        "mutual_fund_details(amc, scheme_name, category, folio_number, agent_advisor, investment_mode, sip_amount, sip_frequency, units), " +
+        "share_details(company_name, symbol, sector, broker, demat_account, quantity, average_purchase_price)"
+    )
     .order("created_at", { ascending: false });
   if (activeType) query = query.eq("investment_type", activeType);
   if (fromDate) query = query.gte("start_date", fromDate);
@@ -59,12 +64,10 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
           <h1 className="text-2xl font-bold text-navy">Investments</h1>
           <p className="text-sm text-muted mt-1 mb-4">Overview, Mutual Funds, Shares and other investment types</p>
         </div>
-        <a href="/api/export/investments" className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy">
-          Export (CSV)
-        </a>
+        <DownloadBar csvHref="/api/export/investments" />
       </div>
 
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex gap-2 mb-6 flex-wrap print:hidden">
         {SUBTABS.map((t) => (
           <Link
             key={t.value}
@@ -76,12 +79,14 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
         ))}
       </div>
 
-      <DateRangeFilter
-        from={fromDate}
-        to={toDate}
-        clearHref={activeType ? `/investments?type=${activeType}` : "/investments"}
-        extraHidden={activeType ? [{ name: "type", value: activeType }] : []}
-      />
+      <div className="print:hidden">
+        <DateRangeFilter
+          from={fromDate}
+          to={toDate}
+          clearHref={activeType ? `/investments?type=${activeType}` : "/investments"}
+          extraHidden={activeType ? [{ name: "type", value: activeType }] : []}
+        />
+      </div>
 
       {!activeType && (
         <div className="grid sm:grid-cols-3 gap-4 mb-8">
@@ -118,31 +123,7 @@ export default async function InvestmentsPage({ searchParams }: { searchParams: 
           </thead>
           <tbody>
             {(investments || []).map((i: any) => (
-              <tr key={i.id} className="border-t border-[#edf0ee]">
-                <td className="p-3 font-semibold">
-                  {i.name}
-                  {i.mutual_fund_details?.scheme_name && <div className="text-muted font-normal">{i.mutual_fund_details.amc} — {i.mutual_fund_details.scheme_name}</div>}
-                </td>
-                <td className="p-3 capitalize">{i.investment_type.replace(/_/g, " ")}</td>
-                <td className="p-3">{formatInr(i.invested_amount)}</td>
-                <td className="p-3">{i.start_date ? formatDate(i.start_date) : "-"}</td>
-                <td className="p-3">{i.current_value ? formatInr(i.current_value) : "-"}</td>
-                <td className="p-3">{i.valuation_date ? formatDate(i.valuation_date) : "-"}</td>
-                <td className="p-3">
-                  <form action={updateCurrentValue} className="flex gap-1">
-                    <input type="hidden" name="id" value={i.id} />
-                    <input name="current_value" type="number" step="0.01" placeholder="Value" className="w-20 border border-[#e3ddd7] rounded-lg p-1.5 text-[11px]" />
-                    <input name="valuation_date" type="date" className="border border-[#e3ddd7] rounded-lg p-1.5 text-[11px]" />
-                    <button type="submit" className="bg-[#edf1f7] text-info rounded-lg px-2 text-[11px] font-semibold">Save</button>
-                  </form>
-                </td>
-                <td className="p-3">
-                  <form action={deleteInvestment}>
-                    <input type="hidden" name="id" value={i.id} />
-                    <button type="submit" className="text-[#b64b52] text-[11px] font-semibold">Delete</button>
-                  </form>
-                </td>
-              </tr>
+              <InvestmentRow key={i.id} investment={i} accounts={accounts || []} />
             ))}
             {(!investments || investments.length === 0) && (
               <tr><td colSpan={8} className="p-6 text-center text-muted">No investments in this view yet.</td></tr>

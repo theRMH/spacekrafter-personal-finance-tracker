@@ -3,6 +3,7 @@ import { formatInr } from "@/lib/format";
 import AddSubscriptionForm from "./add-subscription-form";
 import SubscriptionRow from "./subscription-row";
 import DateRangeFilter from "@/components/date-range-filter";
+import DownloadBar from "@/components/download-bar";
 
 export default async function SubscriptionsPage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const supabase = createClient();
@@ -34,9 +35,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
           <h1 className="text-2xl font-bold text-navy">Subscriptions</h1>
           <p className="text-sm text-muted mt-1 mb-4">Personal and office recurring services</p>
         </div>
-        <a href="/api/export/subscriptions" className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy">
-          Export (CSV)
-        </a>
+        <DownloadBar csvHref="/api/export/subscriptions" />
       </div>
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm p-5 mb-6 max-w-xs">
@@ -45,7 +44,9 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
         <div className="text-[11px] text-muted mt-2">Across {active.length} active subscription(s)</div>
       </div>
 
-      <DateRangeFilter from={fromDate} to={toDate} clearHref="/subscriptions" />
+      <div className="print:hidden">
+        <DateRangeFilter from={fromDate} to={toDate} clearHref="/subscriptions" />
+      </div>
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto mb-8">
         <table className="w-full text-xs min-w-[900px]">

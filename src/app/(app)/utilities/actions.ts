@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
 
 export async function createUtilityConnection(formData: FormData) {
   const supabase = createClient();
@@ -53,6 +54,15 @@ export async function createUtilityConnection(formData: FormData) {
   });
   if (detailErr) throw new Error(detailErr.message);
 
+  await logAudit(supabase, {
+    ownerId: user.id,
+    actorId: user.id,
+    action: "create",
+    entityTable: "commitments",
+    entityId: commitment.id,
+    after: { ...commitment, utility_type: utilityType, location, consumer_number: consumerNumber },
+  });
+
   revalidatePath("/utilities");
   revalidatePath("/calendar");
 }
@@ -80,7 +90,10 @@ export async function updateUtilityConnection(formData: FormData) {
     throw new Error("Connection name, utility type, location and due date are required");
   }
 
-  const { error } = await supabase
+  const { data: beforeCommitment } = await supabase.from("commitments").select("*").eq("id", id).eq("owner_id", user.id).single();
+  const { data: beforeDetails } = await supabase.from("utility_details").select("*").eq("commitment_id", id).single();
+
+  const { data: after, error } = await supabase
     .from("commitments")
     .update({
       name,
@@ -92,14 +105,28 @@ export async function updateUtilityConnection(formData: FormData) {
       provider,
     })
     .eq("id", id)
-    .eq("owner_id", user.id);
+    .eq("owner_id", user.id)
+    .select()
+    .single();
   if (error) throw new Error(error.message);
 
-  const { error: detailErr } = await supabase
+  const { data: afterDetails, error: detailErr } = await supabase
     .from("utility_details")
     .update({ utility_type: utilityType, location, consumer_number: consumerNumber, billing_cycle: billingCycle })
-    .eq("commitment_id", id);
+    .eq("commitment_id", id)
+    .select()
+    .single();
   if (detailErr) throw new Error(detailErr.message);
+
+  await logAudit(supabase, {
+    ownerId: user.id,
+    actorId: user.id,
+    action: "update",
+    entityTable: "commitments",
+    entityId: id,
+    before: { ...beforeCommitment, ...beforeDetails },
+    after: { ...after, ...afterDetails },
+  });
 
   revalidatePath("/utilities");
   revalidatePath("/calendar");

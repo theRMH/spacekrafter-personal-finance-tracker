@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit";
 
 export async function createCategory(formData: FormData) {
   const supabase = createClient();
@@ -12,13 +13,45 @@ export async function createCategory(formData: FormData) {
   const defaultPersonalOrOffice = String(formData.get("default_personal_or_office") || "") || null;
   if (!groupName) throw new Error("Category group name is required");
 
-  const { error } = await supabase.from("categories").insert({
-    owner_id: user.id,
-    group_name: groupName,
-    name: groupName,
-    default_personal_or_office: defaultPersonalOrOffice,
-  });
+  const { data: created, error } = await supabase
+    .from("categories")
+    .insert({
+      owner_id: user.id,
+      group_name: groupName,
+      name: groupName,
+      default_personal_or_office: defaultPersonalOrOffice,
+    })
+    .select()
+    .single();
   if (error) throw new Error(error.message);
+
+  await logAudit(supabase, { ownerId: user.id, actorId: user.id, action: "create", entityTable: "categories", entityId: created.id, after: created });
+
+  revalidatePath("/settings");
+  return created;
+}
+
+// The code is auto-assigned by a DB trigger on insert (categories_assign_code
+// in 0016_category_codes.sql) — this is the Owner's correction path if they
+// want to fix or align it with an existing chart of accounts.
+export async function updateCategoryCode(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const id = String(formData.get("id"));
+  const code = String(formData.get("code") || "").trim();
+  if (!code) throw new Error("Code cannot be empty");
+
+  const { data: before } = await supabase.from("categories").select("code").eq("id", id).eq("owner_id", user.id).single();
+
+  const { error } = await supabase.from("categories").update({ code }).eq("id", id).eq("owner_id", user.id);
+  if (error) {
+    if (error.code === "23505") throw new Error(`Code "${code}" is already used by another category`);
+    throw new Error(error.message);
+  }
+
+  await logAudit(supabase, { ownerId: user.id, actorId: user.id, action: "update_code", entityTable: "categories", entityId: id, before, after: { code } });
 
   revalidatePath("/settings");
 }

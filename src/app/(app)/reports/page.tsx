@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatInr, formatDate } from "@/lib/format";
+import { getAccountMovements } from "@/lib/balances";
 
 const TABS = [
   { value: "overview", label: "Financial Overview" },
@@ -338,16 +339,10 @@ function CounterpartyTab({ tx }: { tx: any[] }) {
 }
 
 async function AccountsTab({ supabase }: { supabase: any }) {
-  const [{ data: accounts }, { data: allTx }] = await Promise.all([
+  const [{ data: accounts }, movement] = await Promise.all([
     supabase.from("accounts").select("id, name, opening_balance, statement_closing_balance, reconciliation_status, last_imported_at"),
-    supabase.from("transactions").select("account_id, amount, type").eq("status", "confirmed").is("deleted_at", null),
+    getAccountMovements(supabase),
   ]);
-
-  const movement = new Map<string, number>();
-  for (const t of allTx || []) {
-    const signed = t.type === "income" ? Number(t.amount) : -Number(t.amount);
-    movement.set(t.account_id, (movement.get(t.account_id) || 0) + signed);
-  }
 
   return (
     <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto">

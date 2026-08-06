@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import AddPolicyForm from "./add-policy-form";
 import PolicyRow from "./policy-row";
 import DateRangeFilter from "@/components/date-range-filter";
+import DownloadBar from "@/components/download-bar";
 
 export default async function InsurancePage({ searchParams }: { searchParams: { from?: string; to?: string } }) {
   const supabase = createClient();
@@ -26,12 +27,12 @@ export default async function InsurancePage({ searchParams }: { searchParams: { 
           <h1 className="text-2xl font-bold text-navy">Insurance</h1>
           <p className="text-sm text-muted mt-1 mb-6">Policies, renewals, premiums and documents</p>
         </div>
-        <a href="/api/export/insurance" className="bg-white border border-[#e3ddd7] rounded-xl px-4 py-2.5 text-sm font-semibold text-navy">
-          Export (CSV)
-        </a>
+        <DownloadBar csvHref="/api/export/insurance" />
       </div>
 
-      <DateRangeFilter from={fromDate} to={toDate} clearHref="/insurance" />
+      <div className="print:hidden">
+        <DateRangeFilter from={fromDate} to={toDate} clearHref="/insurance" />
+      </div>
 
       <div className="bg-white border border-[#e3ddd7] rounded-card shadow-sm overflow-auto mb-8">
         <table className="w-full text-xs min-w-[900px]">
